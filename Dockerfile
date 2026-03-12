@@ -14,8 +14,12 @@ RUN bun run build
 # Create data directory for SQLite
 RUN mkdir -p data
 
+# Copy static assets for standalone
+RUN cp -r public .next/standalone/ 2>/dev/null || true
+RUN cp -r .next/static .next/standalone/.next/static 2>/dev/null || true
+
 # Railway sets PORT dynamically
 ENV PORT=3000
-EXPOSE ${PORT}
+ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "bun run next start -p $PORT"]
+CMD ["sh", "-c", "cd .next/standalone && bun server.js"]
