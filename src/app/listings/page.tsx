@@ -86,7 +86,7 @@ export default async function ListingsPage() {
                       {room.property_name}
                     </h3>
                     <p className="text-sm text-muted mb-1">
-                      {room.property_address}
+                      {room.property_city}
                     </p>
                     <p className="text-sm text-muted mb-3">
                       Room {room.room_number}

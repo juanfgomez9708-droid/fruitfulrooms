@@ -8,6 +8,7 @@ export default function NewPropertyPage() {
     await createProperty({
       name: formData.get("name") as string,
       address: formData.get("address") as string,
+      city: formData.get("city") as string,
       description: (formData.get("description") as string) || undefined,
       photo_url: (formData.get("photo_url") as string) || undefined,
     });
@@ -38,6 +39,15 @@ export default function NewPropertyPage() {
           <input
             name="address"
             required
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">City *</label>
+          <input
+            name="city"
+            required
+            placeholder="e.g. Atlanta, GA"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>

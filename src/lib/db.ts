@@ -24,6 +24,13 @@ export function getDb(): Database {
   // Initialize schema
   initSchema(db);
 
+  // Migration: add city column if missing
+  try {
+    db.run("ALTER TABLE properties ADD COLUMN city TEXT NOT NULL DEFAULT ''");
+  } catch {
+    // Column already exists
+  }
+
   return db;
 }
 
@@ -33,6 +40,7 @@ function initSchema(db: Database): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       address TEXT NOT NULL,
+      city TEXT NOT NULL DEFAULT '',
       description TEXT,
       photo_url TEXT,
       created_at TEXT DEFAULT (datetime('now'))

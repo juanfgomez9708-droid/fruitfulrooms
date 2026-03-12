@@ -99,7 +99,7 @@ export default async function ListingDetailPage({
               <h1 className="text-2xl font-bold">
                 Room {room.room_number} at {property?.name}
               </h1>
-              <p className="text-muted mt-1">{property?.address}</p>
+              <p className="text-muted mt-1">{property?.city}</p>
             </div>
 
             {/* Amenities */}

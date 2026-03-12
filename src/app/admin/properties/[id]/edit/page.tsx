@@ -16,6 +16,7 @@ export default async function EditPropertyPage({
     await updateProperty(Number(id), {
       name: formData.get("name") as string,
       address: formData.get("address") as string,
+      city: formData.get("city") as string,
       description: (formData.get("description") as string) || undefined,
       photo_url: (formData.get("photo_url") as string) || undefined,
     });
@@ -48,6 +49,16 @@ export default async function EditPropertyPage({
             name="address"
             required
             defaultValue={property.address}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">City *</label>
+          <input
+            name="city"
+            required
+            defaultValue={property.city}
+            placeholder="e.g. Atlanta, GA"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>

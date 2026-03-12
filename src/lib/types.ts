@@ -2,6 +2,7 @@ export interface Property {
   id: number;
   name: string;
   address: string;
+  city: string;
   description: string | null;
   photo_url: string | null;
   created_at: string;

@@ -19,15 +19,16 @@ export async function getProperty(id: number): Promise<Property | null> {
 export async function createProperty(data: {
   name: string;
   address: string;
+  city: string;
   description?: string;
   photo_url?: string;
 }): Promise<Property> {
   const db = getDb();
   const result = db
     .query(
-      "INSERT INTO properties (name, address, description, photo_url) VALUES (?, ?, ?, ?) RETURNING *"
+      "INSERT INTO properties (name, address, city, description, photo_url) VALUES (?, ?, ?, ?, ?) RETURNING *"
     )
-    .get(data.name, data.address, data.description ?? null, data.photo_url ?? null) as Property;
+    .get(data.name, data.address, data.city, data.description ?? null, data.photo_url ?? null) as Property;
   revalidatePath("/admin/properties");
   revalidatePath("/admin");
   return result;
@@ -35,7 +36,7 @@ export async function createProperty(data: {
 
 export async function updateProperty(
   id: number,
-  data: { name?: string; address?: string; description?: string; photo_url?: string }
+  data: { name?: string; address?: string; city?: string; description?: string; photo_url?: string }
 ): Promise<Property | null> {
   const db = getDb();
   const existing = await getProperty(id);
@@ -43,11 +44,12 @@ export async function updateProperty(
 
   const result = db
     .query(
-      "UPDATE properties SET name = ?, address = ?, description = ?, photo_url = ? WHERE id = ? RETURNING *"
+      "UPDATE properties SET name = ?, address = ?, city = ?, description = ?, photo_url = ? WHERE id = ? RETURNING *"
     )
     .get(
       data.name ?? existing.name,
       data.address ?? existing.address,
+      data.city ?? existing.city,
       data.description ?? existing.description,
       data.photo_url ?? existing.photo_url,
       id
@@ -170,17 +172,17 @@ export async function deleteRoom(id: number): Promise<void> {
   revalidatePath("/listings");
 }
 
-export async function getVacantRooms(): Promise<(Room & { property_name: string; property_address: string })[]> {
+export async function getVacantRooms(): Promise<(Room & { property_name: string; property_city: string })[]> {
   const db = getDb();
   return db
     .query(
-      `SELECT r.*, p.name AS property_name, p.address AS property_address
+      `SELECT r.*, p.name AS property_name, p.city AS property_city
        FROM rooms r
        JOIN properties p ON r.property_id = p.id
        WHERE r.status = 'vacant'
        ORDER BY r.price ASC`
     )
-    .all() as (Room & { property_name: string; property_address: string })[];
+    .all() as (Room & { property_name: string; property_city: string })[];
 }
 
 // ─── Tenants ─────────────────────────────────────────────────────────────────

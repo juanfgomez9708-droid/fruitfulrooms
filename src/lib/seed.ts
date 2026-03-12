@@ -15,18 +15,21 @@ function seed() {
     {
       name: "Sunrise House",
       address: "42 Victoria Street, Newtown, Wellington 6021",
+      city: "Wellington, NZ",
       description:
         "A vibrant co-living space in the heart of Newtown. Walking distance to cafes, parks, and public transport.",
     },
     {
       name: "Harbour View Lodge",
       address: "15 Oriental Parade, Oriental Bay, Wellington 6011",
+      city: "Wellington, NZ",
       description:
         "Premium waterfront co-living with stunning harbour views. Modern amenities and a rooftop terrace.",
     },
     {
       name: "The Green Commons",
       address: "88 Cuba Street, Te Aro, Wellington 6011",
+      city: "Wellington, NZ",
       description:
         "Eco-friendly co-living on Cuba Street. Shared garden, composting, and community kitchen.",
     },
@@ -34,11 +37,11 @@ function seed() {
 
   const propertyIds: number[] = [];
   const insertProperty = db.prepare(
-    "INSERT INTO properties (name, address, description) VALUES (?, ?, ?) RETURNING id"
+    "INSERT INTO properties (name, address, city, description) VALUES (?, ?, ?, ?) RETURNING id"
   );
 
   for (const p of properties) {
-    const result = insertProperty.get(p.name, p.address, p.description) as { id: number };
+    const result = insertProperty.get(p.name, p.address, p.city, p.description) as { id: number };
     propertyIds.push(result.id);
   }
 
