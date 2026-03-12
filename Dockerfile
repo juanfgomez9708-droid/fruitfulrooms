@@ -14,6 +14,8 @@ RUN bun run build
 # Create data directory for SQLite
 RUN mkdir -p data
 
-EXPOSE 3000
+# Railway sets PORT dynamically
+ENV PORT=3000
+EXPOSE ${PORT}
 
-CMD ["bun", "run", "start"]
+CMD ["sh", "-c", "bun run next start -p $PORT"]
