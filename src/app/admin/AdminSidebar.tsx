@@ -48,7 +48,7 @@ export function AdminSidebar() {
         }`}
       >
         <div className="border-b border-gray-700 px-6 py-5">
-          <h1 className="text-xl font-bold tracking-tight">Fruitful Rooms</h1>
+          <h1 className="text-xl font-bold tracking-tight font-brand lowercase">Fruitful Rooms</h1>
         </div>
 
         <nav className="mt-4 flex-1 space-y-1 px-3">

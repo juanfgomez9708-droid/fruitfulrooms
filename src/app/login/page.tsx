@@ -10,7 +10,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
       <div className="w-full max-w-sm">
         <div className="rounded-xl bg-white p-8 shadow-lg">
-          <h1 className="mb-2 text-center text-2xl font-bold bg-gradient-to-r from-gradient-start via-gradient-mid to-gradient-end bg-clip-text text-transparent">
+          <h1 className="mb-2 text-center text-2xl font-bold bg-gradient-to-r from-gradient-start via-gradient-mid to-gradient-end bg-clip-text text-transparent font-brand lowercase">
             Fruitful Rooms
           </h1>
           <p className="mb-6 text-center text-sm text-gray-500">

@@ -8,7 +8,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link
             href="/"
-            className="text-xl font-bold text-white"
+            className="text-xl font-bold text-white font-brand lowercase"
           >
             Fruitful Rooms
           </Link>
