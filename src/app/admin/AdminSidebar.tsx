@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { logout } from "@/lib/auth";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: "📊" },
@@ -68,8 +69,17 @@ export function AdminSidebar() {
           ))}
         </nav>
 
-        <div className="border-t border-gray-700 px-6 py-4 text-xs text-gray-500">
-          v1.0
+        <div className="border-t border-gray-700 px-4 py-4">
+          <form action={logout}>
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 rounded-lg px-4 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+            >
+              <span className="text-lg">🚪</span>
+              Sign out
+            </button>
+          </form>
+          <p className="mt-2 px-4 text-xs text-gray-500">v1.0</p>
         </div>
       </aside>
     </>

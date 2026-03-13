@@ -2,16 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 import { getDb } from "./db";
+import { requireAuth } from "./auth";
 import type { Property, Room, Tenant, Payment, DashboardStats } from "./types";
 
 // ─── Properties ──────────────────────────────────────────────────────────────
 
 export async function getProperties(): Promise<Property[]> {
+  await requireAuth();
   const db = getDb();
   return db.query("SELECT * FROM properties ORDER BY created_at DESC").all() as Property[];
 }
 
 export async function getProperty(id: number): Promise<Property | null> {
+  await requireAuth();
   const db = getDb();
   return (db.query("SELECT * FROM properties WHERE id = ?").get(id) as Property) ?? null;
 }
@@ -23,6 +26,7 @@ export async function createProperty(data: {
   description?: string;
   photo_url?: string;
 }): Promise<Property> {
+  await requireAuth();
   const db = getDb();
   const result = db
     .query(
@@ -38,6 +42,7 @@ export async function updateProperty(
   id: number,
   data: { name?: string; address?: string; city?: string; description?: string; photo_url?: string }
 ): Promise<Property | null> {
+  await requireAuth();
   const db = getDb();
   const existing = await getProperty(id);
   if (!existing) return null;
@@ -61,6 +66,7 @@ export async function updateProperty(
 }
 
 export async function deleteProperty(id: number): Promise<void> {
+  await requireAuth();
   const db = getDb();
   db.query("DELETE FROM properties WHERE id = ?").run(id);
   revalidatePath("/admin/properties");
@@ -70,6 +76,7 @@ export async function deleteProperty(id: number): Promise<void> {
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
 export async function getRooms(propertyId: number): Promise<Room[]> {
+  await requireAuth();
   const db = getDb();
   return db
     .query("SELECT * FROM rooms WHERE property_id = ? ORDER BY room_number")
@@ -77,6 +84,7 @@ export async function getRooms(propertyId: number): Promise<Room[]> {
 }
 
 export async function getAllRooms(): Promise<(Room & { property_name: string })[]> {
+  await requireAuth();
   const db = getDb();
   return db
     .query(
@@ -89,6 +97,7 @@ export async function getAllRooms(): Promise<(Room & { property_name: string })[
 }
 
 export async function getRoom(id: number): Promise<Room | null> {
+  await requireAuth();
   const db = getDb();
   return (db.query("SELECT * FROM rooms WHERE id = ?").get(id) as Room) ?? null;
 }
@@ -102,6 +111,7 @@ export async function createRoom(data: {
   photo_url?: string;
   description?: string;
 }): Promise<Room> {
+  await requireAuth();
   const db = getDb();
   const result = db
     .query(
@@ -135,6 +145,7 @@ export async function updateRoom(
     description?: string;
   }
 ): Promise<Room | null> {
+  await requireAuth();
   const db = getDb();
   const existing = await getRoom(id);
   if (!existing) return null;
@@ -161,6 +172,7 @@ export async function updateRoom(
 }
 
 export async function deleteRoom(id: number): Promise<void> {
+  await requireAuth();
   const db = getDb();
   const room = await getRoom(id);
   db.query("DELETE FROM rooms WHERE id = ?").run(id);
@@ -188,11 +200,13 @@ export async function getVacantRooms(): Promise<(Room & { property_name: string;
 // ─── Tenants ─────────────────────────────────────────────────────────────────
 
 export async function getTenants(): Promise<Tenant[]> {
+  await requireAuth();
   const db = getDb();
   return db.query("SELECT * FROM tenants ORDER BY created_at DESC").all() as Tenant[];
 }
 
 export async function getTenant(id: number): Promise<Tenant | null> {
+  await requireAuth();
   const db = getDb();
   return (db.query("SELECT * FROM tenants WHERE id = ?").get(id) as Tenant) ?? null;
 }
@@ -205,6 +219,7 @@ export async function createTenant(data: {
   move_in_date?: string;
   status?: string;
 }): Promise<Tenant> {
+  await requireAuth();
   const db = getDb();
   const result = db
     .query(
@@ -242,6 +257,7 @@ export async function updateTenant(
     status?: string;
   }
 ): Promise<Tenant | null> {
+  await requireAuth();
   const db = getDb();
   const existing = await getTenant(id);
   if (!existing) return null;
@@ -281,6 +297,7 @@ export async function updateTenant(
 }
 
 export async function deleteTenant(id: number): Promise<void> {
+  await requireAuth();
   const db = getDb();
   const tenant = await getTenant(id);
 
@@ -298,6 +315,7 @@ export async function deleteTenant(id: number): Promise<void> {
 // ─── Payments ────────────────────────────────────────────────────────────────
 
 export async function getPayments(tenantId?: number): Promise<Payment[]> {
+  await requireAuth();
   const db = getDb();
   if (tenantId) {
     return db
@@ -315,6 +333,7 @@ export async function createPayment(data: {
   status?: string;
   notes?: string;
 }): Promise<Payment> {
+  await requireAuth();
   const db = getDb();
   const result = db
     .query(
@@ -344,6 +363,7 @@ export async function updatePayment(
     notes?: string;
   }
 ): Promise<Payment | null> {
+  await requireAuth();
   const db = getDb();
   const existing = (db.query("SELECT * FROM payments WHERE id = ?").get(id) as Payment) ?? null;
   if (!existing) return null;
@@ -367,6 +387,7 @@ export async function updatePayment(
 }
 
 export async function markPaymentPaid(id: number): Promise<Payment | null> {
+  await requireAuth();
   const db = getDb();
   const result = db
     .query(
@@ -383,6 +404,7 @@ export async function markPaymentPaid(id: number): Promise<Payment | null> {
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
 export async function getDashboardStats(): Promise<DashboardStats> {
+  await requireAuth();
   const db = getDb();
 
   const totalProperties = (
