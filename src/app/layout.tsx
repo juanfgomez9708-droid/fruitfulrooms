@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CoLiving Rentals — Affordable Rooms for Rent",
+  title: "Fruitful Rooms — Affordable Co-Living Rooms for Rent",
   description: "Find affordable co-living rooms for rent. Browse available rooms, check amenities, and move in hassle-free.",
 };
 

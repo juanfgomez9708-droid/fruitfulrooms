@@ -1,16 +1,25 @@
+import { cache } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getPublicRoom, getPublicProperty } from "@/lib/actions";
 
+function parseAmenities(raw: string | null): string[] {
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
+const getCachedRoom = cache((id: number) => getPublicRoom(id));
+const getCachedProperty = cache((id: number) => getPublicProperty(id));
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const room = await getPublicRoom(Number(id));
+  const room = await getCachedRoom(Number(id));
   if (!room || room.status !== "vacant") {
-    return { title: "Room Not Found — CoLiving Rentals" };
+    return { title: "Room Not Found — Fruitful Rooms Rentals" };
   }
-  const property = await getPublicProperty(room.property_id);
+  const property = await getCachedProperty(room.property_id);
   return {
-    title: `Room ${room.room_number} at ${property?.name ?? "CoLiving"} — $${room.price}/week`,
+    title: `Room ${room.room_number} at ${property?.name ?? "Fruitful Rooms"} — $${room.price}/week`,
     description: room.description ?? `Affordable room for rent at ${property?.name}. $${room.price} per week.`,
   };
 }
@@ -21,22 +30,22 @@ export default async function ListingDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const room = await getPublicRoom(Number(id));
+  const room = await getCachedRoom(Number(id));
 
   if (!room || room.status !== "vacant") {
     redirect("/listings");
   }
 
-  const property = await getPublicProperty(room.property_id);
-  const amenities: string[] = room.amenities ? JSON.parse(room.amenities) : [];
+  const property = await getCachedProperty(room.property_id);
+  const amenities = parseAmenities(room.amenities);
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
       <header className="border-b border-card-border bg-card-bg">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-accent">
-            CoLiving
+          <Link href="/" className="text-xl font-bold bg-gradient-to-r from-gradient-start via-gradient-mid to-gradient-end bg-clip-text text-transparent">
+            Fruitful Rooms
           </Link>
           <Link
             href="/listings"
@@ -78,7 +87,7 @@ export default async function ListingDetailPage({
             className="w-full h-64 sm:h-80 md:h-96 object-cover rounded-xl mb-8"
           />
         ) : (
-          <div className="w-full h-64 sm:h-80 md:h-96 bg-gradient-to-br from-blue-400 via-blue-500 to-emerald-500 rounded-xl mb-8 flex items-center justify-center">
+          <div className="w-full h-64 sm:h-80 md:h-96 bg-gradient-to-br from-gradient-start via-gradient-mid to-gradient-end rounded-xl mb-8 flex items-center justify-center">
             <span className="text-white/70 text-7xl font-light">
               {room.room_number}
             </span>
@@ -164,7 +173,7 @@ export default async function ListingDetailPage({
                   >
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
-                  <span className="text-foreground">(555) 123-4567</span>
+                  <span className="text-foreground">(386) 310-3035</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <svg
@@ -182,7 +191,7 @@ export default async function ListingDetailPage({
                     <rect width="20" height="16" x="2" y="4" rx="2" />
                     <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                   </svg>
-                  <span className="text-foreground">rentals@coliving.com</span>
+                  <span className="text-foreground">rentals@fruitfulhomeoffers.com</span>
                 </div>
               </div>
               <div className="mt-5 pt-4 border-t border-card-border">
@@ -198,7 +207,7 @@ export default async function ListingDetailPage({
       {/* Footer */}
       <footer className="border-t border-card-border py-6 px-4 mt-auto">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted">
-          <p>&copy; {new Date().getFullYear()} CoLiving Rentals. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Fruitful Rooms Rentals. All rights reserved.</p>
           <Link
             href="/admin"
             className="text-xs text-muted/50 hover:text-muted transition-colors"

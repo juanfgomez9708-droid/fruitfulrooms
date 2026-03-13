@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getVacantRooms } from "@/lib/actions";
 
 export const metadata = {
-  title: "Available Rooms — CoLiving Rentals",
+  title: "Available Rooms — Fruitful Rooms Rentals",
   description: "Browse all available co-living rooms for rent.",
 };
 
@@ -14,8 +14,8 @@ export default async function ListingsPage() {
       {/* Header */}
       <header className="border-b border-card-border bg-card-bg">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-accent">
-            CoLiving
+          <Link href="/" className="text-xl font-bold bg-gradient-to-r from-gradient-start via-gradient-mid to-gradient-end bg-clip-text text-transparent">
+            Fruitful Rooms
           </Link>
           <Link
             href="/listings"
@@ -47,9 +47,9 @@ export default async function ListingsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
-              const amenities: string[] = room.amenities
-                ? JSON.parse(room.amenities)
-                : [];
+              let amenities: string[] = [];
+              try { amenities = room.amenities ? JSON.parse(room.amenities) : []; } catch {}
+
 
               return (
                 <Link
@@ -65,7 +65,7 @@ export default async function ListingsPage() {
                       className="w-full h-48 object-cover"
                     />
                   ) : (
-                    <div className="w-full h-48 bg-gradient-to-br from-blue-400 via-blue-500 to-emerald-500 flex items-center justify-center">
+                    <div className="w-full h-48 bg-gradient-to-br from-gradient-start via-gradient-mid to-gradient-end flex items-center justify-center">
                       <span className="text-white/80 text-5xl font-light">
                         {room.room_number}
                       </span>
@@ -126,7 +126,7 @@ export default async function ListingsPage() {
       {/* Footer */}
       <footer className="border-t border-card-border py-6 px-4 mt-auto">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted">
-          <p>&copy; {new Date().getFullYear()} CoLiving Rentals. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Fruitful Rooms Rentals. All rights reserved.</p>
           <Link
             href="/admin"
             className="text-xs text-muted/50 hover:text-muted transition-colors"
