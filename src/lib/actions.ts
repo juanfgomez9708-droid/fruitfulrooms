@@ -197,6 +197,18 @@ export async function getVacantRooms(): Promise<(Room & { property_name: string;
     .all() as (Room & { property_name: string; property_city: string })[];
 }
 
+// ─── Public Read-Only (no auth required) ────────────────────────────────────
+
+export async function getPublicRoom(id: number): Promise<Room | null> {
+  const db = getDb();
+  return (db.query("SELECT * FROM rooms WHERE id = ?").get(id) as Room) ?? null;
+}
+
+export async function getPublicProperty(id: number): Promise<Property | null> {
+  const db = getDb();
+  return (db.query("SELECT * FROM properties WHERE id = ?").get(id) as Property) ?? null;
+}
+
 // ─── Tenants ─────────────────────────────────────────────────────────────────
 
 export async function getTenants(): Promise<Tenant[]> {

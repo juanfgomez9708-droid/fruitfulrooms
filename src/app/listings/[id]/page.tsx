@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getRoom, getProperty } from "@/lib/actions";
+import { getPublicRoom, getPublicProperty } from "@/lib/actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const room = await getRoom(Number(id));
+  const room = await getPublicRoom(Number(id));
   if (!room || room.status !== "vacant") {
     return { title: "Room Not Found — CoLiving Rentals" };
   }
-  const property = await getProperty(room.property_id);
+  const property = await getPublicProperty(room.property_id);
   return {
     title: `Room ${room.room_number} at ${property?.name ?? "CoLiving"} — $${room.price}/week`,
     description: room.description ?? `Affordable room for rent at ${property?.name}. $${room.price} per week.`,
@@ -21,13 +21,13 @@ export default async function ListingDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const room = await getRoom(Number(id));
+  const room = await getPublicRoom(Number(id));
 
   if (!room || room.status !== "vacant") {
     redirect("/listings");
   }
 
-  const property = await getProperty(room.property_id);
+  const property = await getPublicProperty(room.property_id);
   const amenities: string[] = room.amenities ? JSON.parse(room.amenities) : [];
 
   return (
