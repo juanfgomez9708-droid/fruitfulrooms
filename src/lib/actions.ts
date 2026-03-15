@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "./db";
 import { requireAuth } from "./auth";
-import { VALID_EMPLOYMENT, VALID_INCOME, INQUIRY_STATUSES } from "./constants";
-import type { Property, Room, Tenant, Payment, Inquiry, DashboardStats } from "./types";
+import { VALID_EMPLOYMENT, VALID_INCOME, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
+import { getCurrentMonth } from "./utils";
+import type { Property, Room, Tenant, Payment, Inquiry, Expense, DashboardStats } from "./types";
 
 // ─── Properties ──────────────────────────────────────────────────────────────
 
@@ -546,6 +547,107 @@ export async function updateInquiryStatus(id: number, status: string): Promise<v
   revalidatePath(`/admin/inquiries/${id}`);
 }
 
+// ─── Expenses ────────────────────────────────────────────────────────────────
+
+export async function getExpenses(propertyId?: number, month?: string): Promise<(Expense & { property_name: string })[]> {
+  await requireAuth();
+  const db = getDb();
+  let sql = `SELECT e.*, p.name AS property_name FROM expenses e JOIN properties p ON e.property_id = p.id`;
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  if (propertyId) {
+    conditions.push("e.property_id = ?");
+    params.push(propertyId);
+  }
+  if (month) {
+    conditions.push("e.month = ?");
+    params.push(month);
+  }
+
+  if (conditions.length > 0) {
+    sql += " WHERE " + conditions.join(" AND ");
+  }
+  sql += " ORDER BY e.month DESC, p.name, e.category LIMIT 500";
+
+  return db.query(sql).all(...params) as (Expense & { property_name: string })[];
+}
+
+export async function getExpense(id: number): Promise<Expense | null> {
+  await requireAuth();
+  const db = getDb();
+  return (db.query("SELECT * FROM expenses WHERE id = ?").get(id) as Expense) ?? null;
+}
+
+export async function createExpense(data: {
+  property_id: number;
+  category: string;
+  amount: number;
+  month: string;
+  notes?: string;
+}): Promise<Expense> {
+  await requireAuth();
+  const db = getDb();
+
+  if (!VALID_EXPENSE_CATEGORIES.includes(data.category)) {
+    throw new Error("Invalid expense category.");
+  }
+  if (!/^\d{4}-\d{2}$/.test(data.month)) {
+    throw new Error("Month must be in YYYY-MM format.");
+  }
+
+  const result = db
+    .query(
+      `INSERT INTO expenses (property_id, category, amount, month, notes)
+       VALUES (?, ?, ?, ?, ?) RETURNING *`
+    )
+    .get(data.property_id, data.category, data.amount, data.month, data.notes ?? null) as Expense;
+  revalidatePath("/admin/expenses");
+  revalidatePath("/admin");
+  return result;
+}
+
+export async function updateExpense(
+  id: number,
+  data: { category?: string; amount?: number; month?: string; notes?: string | null }
+): Promise<Expense | null> {
+  await requireAuth();
+  const db = getDb();
+  const existing = (db.query("SELECT * FROM expenses WHERE id = ?").get(id) as Expense) ?? null;
+  if (!existing) return null;
+
+  if (data.category && !VALID_EXPENSE_CATEGORIES.includes(data.category)) {
+    throw new Error("Invalid expense category.");
+  }
+  if (data.month && !/^\d{4}-\d{2}$/.test(data.month)) {
+    throw new Error("Month must be in YYYY-MM format.");
+  }
+
+  const result = db
+    .query(
+      `UPDATE expenses SET category = ?, amount = ?, month = ?, notes = ?
+       WHERE id = ? RETURNING *`
+    )
+    .get(
+      data.category ?? existing.category,
+      data.amount ?? existing.amount,
+      data.month ?? existing.month,
+      data.notes !== undefined ? (data.notes ?? null) : existing.notes,
+      id
+    ) as Expense;
+  revalidatePath("/admin/expenses");
+  revalidatePath("/admin");
+  return result;
+}
+
+export async function deleteExpense(id: number): Promise<void> {
+  await requireAuth();
+  const db = getDb();
+  db.query("DELETE FROM expenses WHERE id = ?").run(id);
+  revalidatePath("/admin/expenses");
+  revalidatePath("/admin");
+}
+
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -574,8 +676,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
 
+  const currentMonth = getCurrentMonth();
+
   const rentCollected = (
-    db.query("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid'").get() as {
+    db.query("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid' AND strftime('%Y-%m', due_date) = ?").get(currentMonth) as {
       total: number;
     }
   ).total;
@@ -583,10 +687,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const rentOutstanding = (
     db
       .query(
-        "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status IN ('upcoming', 'overdue')"
+        "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status IN ('upcoming', 'overdue') AND strftime('%Y-%m', due_date) = ?"
       )
-      .get() as { total: number }
+      .get(currentMonth) as { total: number }
   ).total;
+
+  const totalExpenses = (
+    db
+      .query("SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE month = ?")
+      .get(currentMonth) as { total: number }
+  ).total;
+
+  const netIncome = rentCollected - totalExpenses;
 
   return {
     totalProperties,
@@ -595,5 +707,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     occupancyRate,
     rentCollected,
     rentOutstanding,
+    totalExpenses,
+    netIncome,
   };
 }

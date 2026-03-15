@@ -29,3 +29,19 @@ export const INQUIRY_STATUS_COLORS: Record<string, string> = {
 
 export const VALID_EMPLOYMENT = EMPLOYMENT_OPTIONS.map((o) => o.value) as unknown as string[];
 export const VALID_INCOME = INCOME_OPTIONS.map((o) => o.value) as unknown as string[];
+
+// ─── Expense Constants ──────────────────────────────────────────────────────
+
+export const EXPENSE_CATEGORIES = [
+  { value: "mortgage", label: "Mortgage Payment" },
+  { value: "electricity", label: "Electricity Bill" },
+  { value: "water", label: "Water Bill" },
+  { value: "internet", label: "Internet Bill" },
+  { value: "pest_control", label: "Pest Control" },
+  { value: "repairs", label: "Monthly Repairs" },
+  { value: "cleaning", label: "Cleaning" },
+  { value: "lender_payment", label: "Private Money Lender Payment" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const VALID_EXPENSE_CATEGORIES = EXPENSE_CATEGORIES.map((c) => c.value) as unknown as string[];

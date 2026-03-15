@@ -320,9 +320,22 @@ function initSchema(db: Database): void {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+      category TEXT NOT NULL,
+      amount REAL NOT NULL,
+      month TEXT NOT NULL,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Indexes for common query patterns
   db.run(`CREATE INDEX IF NOT EXISTS idx_rooms_property_status ON rooms(property_id, status)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_inquiries_room_id ON inquiries(room_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_tenants_room_id ON tenants(room_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_payments_tenant_id ON payments(tenant_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_property_month ON expenses(property_id, month)`);
 }

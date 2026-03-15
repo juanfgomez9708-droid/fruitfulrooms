@@ -59,6 +59,16 @@ export interface Inquiry {
   created_at: string;
 }
 
+export interface Expense {
+  id: number;
+  property_id: number;
+  category: string;
+  amount: number;
+  month: string; // YYYY-MM format
+  notes: string | null;
+  created_at: string;
+}
+
 export interface DashboardStats {
   totalProperties: number;
   totalRooms: number;
@@ -66,4 +76,6 @@ export interface DashboardStats {
   occupancyRate: number;
   rentCollected: number;
   rentOutstanding: number;
+  totalExpenses: number;
+  netIncome: number;
 }

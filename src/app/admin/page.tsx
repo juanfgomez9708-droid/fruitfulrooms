@@ -47,6 +47,30 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* P&L Summary */}
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="card">
+          <p className="text-sm text-gray-500">Monthly Expenses</p>
+          <p className="mt-1 text-2xl font-bold text-red-600">
+            ${stats.totalExpenses.toLocaleString()}
+          </p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-gray-500">Net Income</p>
+          <p className={`mt-1 text-2xl font-bold ${stats.netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+            ${stats.netIncome.toLocaleString()}
+          </p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-gray-500">Margin</p>
+          <p className={`mt-1 text-2xl font-bold ${stats.netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+            {stats.rentCollected > 0
+              ? `${Math.round((stats.netIncome / stats.rentCollected) * 100)}%`
+              : "—"}
+          </p>
+        </div>
+      </div>
+
       {/* Recent payments */}
       <div className="card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Recent Payments</h2>

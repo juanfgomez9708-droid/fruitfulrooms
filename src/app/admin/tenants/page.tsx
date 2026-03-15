@@ -33,6 +33,7 @@ export default async function TenantsPage() {
                 <th className="pb-2 font-medium">Email</th>
                 <th className="pb-2 font-medium">Phone</th>
                 <th className="pb-2 font-medium">Room</th>
+                <th className="pb-2 font-medium">Move-in</th>
                 <th className="pb-2 font-medium">Status</th>
                 <th className="pb-2 font-medium">Actions</th>
               </tr>
@@ -49,6 +50,7 @@ export default async function TenantsPage() {
                   <td className="py-2 text-gray-600">
                     {tenant.room_id ? roomMap.get(tenant.room_id) ?? "Unassigned" : "Unassigned"}
                   </td>
+                  <td className="py-2 text-gray-600">{tenant.move_in_date ?? "-"}</td>
                   <td className="py-2">
                     <span className={`badge badge-${tenant.status}`}>
                       {tenant.status}
