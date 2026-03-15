@@ -73,37 +73,37 @@ function seed() {
 
   const roomData: { property_index: number; room_number: string; price: number; status: string }[] = [
     // Woodcrest — 4 rooms (2 occupied, 2 vacant)
-    { property_index: 0, room_number: "Room 1", price: 750, status: "occupied" },
-    { property_index: 0, room_number: "Room 2", price: 750, status: "occupied" },
+    { property_index: 0, room_number: "Room 1", price: 650, status: "vacant" },
+    { property_index: 0, room_number: "Room 2", price: 700, status: "occupied" },
     { property_index: 0, room_number: "Room 3", price: 750, status: "vacant" },
-    { property_index: 0, room_number: "Room 4", price: 750, status: "vacant" },
+    { property_index: 0, room_number: "Room 4", price: 950, status: "occupied" },
 
     // Continental — 8 rooms (3 occupied, 5 vacant)
-    { property_index: 1, room_number: "Room 1", price: 750, status: "occupied" },
-    { property_index: 1, room_number: "Room 2", price: 750, status: "occupied" },
-    { property_index: 1, room_number: "Room 3", price: 750, status: "occupied" },
-    { property_index: 1, room_number: "Room 4", price: 750, status: "vacant" },
-    { property_index: 1, room_number: "Room 5", price: 750, status: "vacant" },
-    { property_index: 1, room_number: "Room 6", price: 750, status: "vacant" },
-    { property_index: 1, room_number: "Room 7", price: 750, status: "vacant" },
-    { property_index: 1, room_number: "Room 8", price: 750, status: "vacant" },
+    { property_index: 1, room_number: "Room 1", price: 650, status: "vacant" },
+    { property_index: 1, room_number: "Room 2", price: 850, status: "occupied" },
+    { property_index: 1, room_number: "Room 3", price: 850, status: "vacant" },
+    { property_index: 1, room_number: "Room 4", price: 800, status: "occupied" },
+    { property_index: 1, room_number: "Room 5", price: 850, status: "vacant" },
+    { property_index: 1, room_number: "Room 6", price: 850, status: "vacant" },
+    { property_index: 1, room_number: "Room 7", price: 850, status: "vacant" },
+    { property_index: 1, room_number: "Room 8", price: 750, status: "occupied" },
 
     // Shady Acres — 5 rooms (1 occupied, 4 vacant)
-    { property_index: 2, room_number: "Room 1", price: 750, status: "occupied" },
-    { property_index: 2, room_number: "Room 2", price: 750, status: "vacant" },
-    { property_index: 2, room_number: "Room 3", price: 750, status: "vacant" },
+    { property_index: 2, room_number: "Room 1", price: 800, status: "vacant" },
+    { property_index: 2, room_number: "Room 2", price: 800, status: "occupied" },
+    { property_index: 2, room_number: "Room 3", price: 700, status: "vacant" },
     { property_index: 2, room_number: "Room 4", price: 750, status: "vacant" },
-    { property_index: 2, room_number: "Room 5", price: 750, status: "vacant" },
+    { property_index: 2, room_number: "Room 5", price: 850, status: "vacant" },
 
     // Cadillac — 8 rooms (7 occupied, 1 vacant)
-    { property_index: 3, room_number: "Room 1", price: 750, status: "occupied" },
-    { property_index: 3, room_number: "Room 2", price: 750, status: "occupied" },
-    { property_index: 3, room_number: "Room 3", price: 750, status: "occupied" },
-    { property_index: 3, room_number: "Room 4", price: 750, status: "occupied" },
-    { property_index: 3, room_number: "Room 5", price: 750, status: "occupied" },
-    { property_index: 3, room_number: "Room 6", price: 750, status: "occupied" },
-    { property_index: 3, room_number: "Room 7", price: 750, status: "occupied" },
-    { property_index: 3, room_number: "Room 8", price: 750, status: "vacant" },
+    { property_index: 3, room_number: "Room 1", price: 820, status: "occupied" },
+    { property_index: 3, room_number: "Room 2", price: 772, status: "occupied" },
+    { property_index: 3, room_number: "Room 3", price: 740, status: "occupied" },
+    { property_index: 3, room_number: "Room 4", price: 756, status: "occupied" },
+    { property_index: 3, room_number: "Room 5", price: 820, status: "occupied" },
+    { property_index: 3, room_number: "Room 6", price: 744, status: "vacant" },
+    { property_index: 3, room_number: "Room 7", price: 776, status: "occupied" },
+    { property_index: 3, room_number: "Room 8", price: 772, status: "occupied" },
   ];
 
   const insertRoom = db.prepare(
@@ -131,7 +131,7 @@ function seed() {
   console.log("\nSeed complete!");
   console.log("\nSummary:");
   console.log("  Woodcrest House (Ormond Beach) — 4 rooms, 2 vacant");
-  console.log("  Continental House (Orlando) — 8 rooms, 5 vacant");
+  console.log("  Continental House (Orlando) — 8 rooms, 5 vacant (prices: $650-$850)");
   console.log("  Shady Acres House (Mulberry) — 5 rooms, 4 vacant");
   console.log("  Cadillac House (Daytona Beach) — 8 rooms, 1 vacant");
 }

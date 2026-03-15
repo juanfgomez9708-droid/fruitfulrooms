@@ -37,6 +37,12 @@ export function getDb(): Database {
     seedProperties(db);
   }
 
+  // Migrations: Update room prices and statuses for live DB (2026-03-15)
+  migrateContientalRooms(db);
+  migrateWoodcrestRooms(db);
+  migrateShadyAcresRooms(db);
+  migrateCadillacRooms(db);
+
   return db;
 }
 
@@ -76,12 +82,37 @@ function seedProperties(db: Database): void {
     "Bed with mattress", "Nightstand", "Work desk", "Closet space", "Wi-Fi", "Electricity", "Water",
   ]);
 
-  // [property_index, total_rooms, occupied_rooms]
-  const roomCounts: [number, number, number][] = [
-    [0, 4, 2],  // Woodcrest: 4 rooms, 2 occupied
-    [1, 8, 3],  // Continental: 8 rooms, 3 occupied
-    [2, 5, 1],  // Shady Acres: 5 rooms, 1 occupied
-    [3, 8, 7],  // Cadillac: 8 rooms, 7 occupied
+  // Per-room pricing for properties with varied rates
+  const perRoomData: { propIndex: number; room: string; price: number; status: string }[] = [
+    // Woodcrest — 4 rooms
+    { propIndex: 0, room: "Room 1", price: 650, status: "vacant" },
+    { propIndex: 0, room: "Room 2", price: 700, status: "occupied" },
+    { propIndex: 0, room: "Room 3", price: 750, status: "vacant" },
+    { propIndex: 0, room: "Room 4", price: 950, status: "occupied" },
+    // Continental — 8 rooms
+    { propIndex: 1, room: "Room 1", price: 650, status: "vacant" },
+    { propIndex: 1, room: "Room 2", price: 850, status: "occupied" },
+    { propIndex: 1, room: "Room 3", price: 850, status: "vacant" },
+    { propIndex: 1, room: "Room 4", price: 800, status: "occupied" },
+    { propIndex: 1, room: "Room 5", price: 850, status: "vacant" },
+    { propIndex: 1, room: "Room 6", price: 850, status: "vacant" },
+    { propIndex: 1, room: "Room 7", price: 850, status: "vacant" },
+    { propIndex: 1, room: "Room 8", price: 750, status: "occupied" },
+    // Shady Acres — 5 rooms
+    { propIndex: 2, room: "Room 1", price: 800, status: "vacant" },
+    { propIndex: 2, room: "Room 2", price: 800, status: "occupied" },
+    { propIndex: 2, room: "Room 3", price: 700, status: "vacant" },
+    { propIndex: 2, room: "Room 4", price: 750, status: "vacant" },
+    { propIndex: 2, room: "Room 5", price: 850, status: "vacant" },
+    // Cadillac — 8 rooms
+    { propIndex: 3, room: "Room 1", price: 820, status: "occupied" },
+    { propIndex: 3, room: "Room 2", price: 772, status: "occupied" },
+    { propIndex: 3, room: "Room 3", price: 740, status: "occupied" },
+    { propIndex: 3, room: "Room 4", price: 756, status: "occupied" },
+    { propIndex: 3, room: "Room 5", price: 820, status: "occupied" },
+    { propIndex: 3, room: "Room 6", price: 744, status: "vacant" },
+    { propIndex: 3, room: "Room 7", price: 776, status: "occupied" },
+    { propIndex: 3, room: "Room 8", price: 772, status: "occupied" },
   ];
 
   const insertProperty = db.prepare(
@@ -97,11 +128,123 @@ function seedProperties(db: Database): void {
     propertyIds.push(result.id);
   }
 
-  for (const [propIdx, totalRooms, occupiedRooms] of roomCounts) {
-    for (let i = 1; i <= totalRooms; i++) {
-      const status = i <= occupiedRooms ? "occupied" : "vacant";
-      insertRoom.run(propertyIds[propIdx], `Room ${i}`, 750, status, roomAmenities, "Fully furnished room");
-    }
+  // All properties — per-room pricing
+  for (const r of perRoomData) {
+    insertRoom.run(propertyIds[r.propIndex], r.room, r.price, r.status, roomAmenities, "Fully furnished room");
+  }
+}
+
+function migrateCadillacRooms(db: Database): void {
+  const cadillac = db.query("SELECT id FROM properties WHERE name = 'Cadillac House'").get() as { id: number } | null;
+  if (!cadillac) return;
+
+  const room1 = db.query(
+    "SELECT id, price FROM rooms WHERE property_id = ? AND room_number = 'Room 1'"
+  ).get(cadillac.id) as { id: number; price: number } | null;
+
+  // Skip if already migrated (Room 1 should be $820, not $750)
+  if (!room1 || room1.price !== 750) return;
+
+  const updates: { room: string; price: number; status: string }[] = [
+    { room: "Room 1", price: 820, status: "occupied" },
+    { room: "Room 2", price: 772, status: "occupied" },
+    { room: "Room 3", price: 740, status: "occupied" },
+    { room: "Room 4", price: 756, status: "occupied" },
+    { room: "Room 5", price: 820, status: "occupied" },
+    { room: "Room 6", price: 744, status: "vacant" },
+    { room: "Room 7", price: 776, status: "occupied" },
+    { room: "Room 8", price: 772, status: "occupied" },
+  ];
+
+  const stmt = db.prepare(
+    "UPDATE rooms SET price = ?, status = ? WHERE property_id = ? AND room_number = ?"
+  );
+  for (const u of updates) {
+    stmt.run(u.price, u.status, cadillac.id, u.room);
+  }
+}
+
+function migrateShadyAcresRooms(db: Database): void {
+  const shadyAcres = db.query("SELECT id FROM properties WHERE name = 'Shady Acres House'").get() as { id: number } | null;
+  if (!shadyAcres) return;
+
+  const room1 = db.query(
+    "SELECT id, price FROM rooms WHERE property_id = ? AND room_number = 'Room 1'"
+  ).get(shadyAcres.id) as { id: number; price: number } | null;
+
+  // Skip if already migrated (Room 1 should be $800, not $750)
+  if (!room1 || room1.price !== 750) return;
+
+  const updates: { room: string; price: number; status: string }[] = [
+    { room: "Room 1", price: 800, status: "vacant" },
+    { room: "Room 2", price: 800, status: "occupied" },
+    { room: "Room 3", price: 700, status: "vacant" },
+    { room: "Room 4", price: 750, status: "vacant" },
+    { room: "Room 5", price: 850, status: "vacant" },
+  ];
+
+  const stmt = db.prepare(
+    "UPDATE rooms SET price = ?, status = ? WHERE property_id = ? AND room_number = ?"
+  );
+  for (const u of updates) {
+    stmt.run(u.price, u.status, shadyAcres.id, u.room);
+  }
+}
+
+function migrateWoodcrestRooms(db: Database): void {
+  const woodcrest = db.query("SELECT id FROM properties WHERE name = 'Woodcrest House'").get() as { id: number } | null;
+  if (!woodcrest) return;
+
+  const room1 = db.query(
+    "SELECT id, price FROM rooms WHERE property_id = ? AND room_number = 'Room 1'"
+  ).get(woodcrest.id) as { id: number; price: number } | null;
+
+  // Skip if already migrated (Room 1 should be $650, not $750)
+  if (!room1 || room1.price !== 750) return;
+
+  const updates: { room: string; price: number; status: string }[] = [
+    { room: "Room 1", price: 650, status: "vacant" },
+    { room: "Room 2", price: 700, status: "occupied" },
+    { room: "Room 3", price: 750, status: "vacant" },
+    { room: "Room 4", price: 950, status: "occupied" },
+  ];
+
+  const stmt = db.prepare(
+    "UPDATE rooms SET price = ?, status = ? WHERE property_id = ? AND room_number = ?"
+  );
+  for (const u of updates) {
+    stmt.run(u.price, u.status, woodcrest.id, u.room);
+  }
+}
+
+function migrateContientalRooms(db: Database): void {
+  // Idempotent: only runs if Continental rooms still have old flat pricing
+  const continental = db.query("SELECT id FROM properties WHERE name = 'Continental House'").get() as { id: number } | null;
+  if (!continental) return;
+
+  const room1 = db.query(
+    "SELECT id, price FROM rooms WHERE property_id = ? AND room_number = 'Room 1'"
+  ).get(continental.id) as { id: number; price: number } | null;
+
+  // Skip if already migrated (Room 1 should be $650, not $750)
+  if (!room1 || room1.price !== 750) return;
+
+  const updates: { room: string; price: number; status: string }[] = [
+    { room: "Room 1", price: 650, status: "vacant" },
+    { room: "Room 2", price: 850, status: "occupied" },
+    { room: "Room 3", price: 850, status: "vacant" },
+    { room: "Room 4", price: 800, status: "occupied" },
+    { room: "Room 5", price: 850, status: "vacant" },
+    { room: "Room 6", price: 850, status: "vacant" },
+    { room: "Room 7", price: 850, status: "vacant" },
+    { room: "Room 8", price: 750, status: "occupied" },
+  ];
+
+  const stmt = db.prepare(
+    "UPDATE rooms SET price = ?, status = ? WHERE property_id = ? AND room_number = ?"
+  );
+  for (const u of updates) {
+    stmt.run(u.price, u.status, continental.id, u.room);
   }
 }
 
