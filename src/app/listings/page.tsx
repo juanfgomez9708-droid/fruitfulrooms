@@ -2,8 +2,14 @@ import Link from "next/link";
 import { getVacantRooms } from "@/lib/actions";
 
 export const metadata = {
-  title: "Available Rooms — Fruitful Rooms Rentals",
-  description: "Browse all available co-living rooms for rent.",
+  title: "Available Rooms for Rent in Florida",
+  description: "Browse furnished rooms for rent in Orlando, Daytona Beach, Ormond Beach, and Mulberry FL. Utilities included, no deposit. Starting at $650/month. Apply online.",
+  openGraph: {
+    title: "Available Rooms for Rent — Fruitful Rooms",
+    description: "Furnished rooms starting at $650/month. All utilities included. Browse and apply online.",
+    url: "https://fruitfulrooms.com/listings",
+  },
+  alternates: { canonical: "https://fruitfulrooms.com/listings" },
 };
 
 export default async function ListingsPage() {

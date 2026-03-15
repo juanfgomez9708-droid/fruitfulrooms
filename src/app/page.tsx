@@ -1,5 +1,11 @@
 import Link from "next/link";
 
+export const metadata = {
+  title: "Affordable Furnished Rooms for Rent in Florida",
+  description: "Fruitful Rooms offers affordable furnished rooms for rent in Orlando, Daytona Beach, Ormond Beach, and Mulberry FL. All utilities included, no deposit, no brokers. Browse rooms and apply online.",
+  alternates: { canonical: "https://fruitfulrooms.com" },
+};
+
 export default function Home() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">

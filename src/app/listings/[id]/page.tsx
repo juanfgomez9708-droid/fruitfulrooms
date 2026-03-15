@@ -16,12 +16,24 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const room = await getCachedRoom(Number(id));
   if (!room || room.status !== "vacant") {
-    return { title: "Room Not Found — Fruitful Rooms Rentals" };
+    return { title: "Room Not Found" };
   }
   const property = await getCachedProperty(room.property_id);
+  const city = property?.city ?? "Florida";
+  const name = property?.name ?? "Fruitful Rooms";
+  const title = `Furnished Room for Rent in ${city} — $${room.price}/mo at ${name}`;
+  const description = `${room.room_number} at ${name} in ${city}. $${room.price}/month, all utilities included. Furnished, no deposit, no brokers. Apply online today.`;
+
   return {
-    title: `Room ${room.room_number} at ${property?.name ?? "Fruitful Rooms"} — $${room.price}/week`,
-    description: room.description ?? `Affordable room for rent at ${property?.name}. $${room.price} per week.`,
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: `https://fruitfulrooms.com/listings/${id}`,
+      type: "website",
+    },
+    alternates: { canonical: `https://fruitfulrooms.com/listings/${id}` },
   };
 }
 
