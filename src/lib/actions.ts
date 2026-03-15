@@ -210,6 +210,27 @@ export async function getPublicProperty(id: number): Promise<Property | null> {
   return (db.query("SELECT * FROM properties WHERE id = ?").get(id) as Property) ?? null;
 }
 
+export async function getPublicProperties(): Promise<(Property & { vacant_count: number; min_price: number })[]> {
+  const db = getDb();
+  return db
+    .query(
+      `SELECT p.*, COUNT(r.id) AS vacant_count, MIN(r.price) AS min_price
+       FROM properties p
+       JOIN rooms r ON r.property_id = p.id AND r.status = 'vacant'
+       GROUP BY p.id
+       HAVING vacant_count > 0
+       ORDER BY p.name`
+    )
+    .all() as (Property & { vacant_count: number; min_price: number })[];
+}
+
+export async function getPropertyVacantRooms(propertyId: number): Promise<Room[]> {
+  const db = getDb();
+  return db
+    .query("SELECT * FROM rooms WHERE property_id = ? AND status = 'vacant' ORDER BY price ASC")
+    .all(propertyId) as Room[];
+}
+
 // ─── Tenants ─────────────────────────────────────────────────────────────────
 
 export async function getTenants(): Promise<Tenant[]> {

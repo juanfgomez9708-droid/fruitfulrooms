@@ -62,7 +62,7 @@ export default async function InquiryDetailPage({
               </div>
               <div>
                 <span className="text-gray-500 block">Room Price</span>
-                <span className="font-medium">${inquiry.room_price}/week</span>
+                <span className="font-medium">${inquiry.room_price}/mo</span>
               </div>
             </div>
           </div>
