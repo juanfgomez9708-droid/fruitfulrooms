@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "./db";
 import { requireAuth } from "./auth";
-import type { Property, Room, Tenant, Payment, DashboardStats } from "./types";
+import { VALID_EMPLOYMENT, VALID_INCOME, INQUIRY_STATUSES } from "./constants";
+import type { Property, Room, Tenant, Payment, Inquiry, DashboardStats } from "./types";
 
 // ─── Properties ──────────────────────────────────────────────────────────────
 
@@ -411,6 +412,117 @@ export async function markPaymentPaid(id: number): Promise<Payment | null> {
   revalidatePath("/admin/payments");
   revalidatePath("/admin");
   return result;
+}
+
+// ─── Inquiries ──────────────────────────────────────────────────────────────
+
+export async function submitInquiry(data: {
+  room_id: number;
+  name: string;
+  email: string;
+  phone: string;
+  employment_status: string;
+  income_range: string;
+  desired_move_in: string;
+  occupants: string;
+  has_pets: string;
+  background_check_consent: string;
+  about?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  // Public action — no auth required
+  const db = getDb();
+
+  const name = data.name?.trim();
+  const email = data.email?.trim().toLowerCase();
+  const phone = data.phone?.trim();
+  const about = data.about?.trim() || null;
+
+  // Required fields
+  if (!name || !email || !phone) {
+    return { success: false, error: "Name, email, and phone are required." };
+  }
+
+  // Length limits
+  if (name.length > 200 || email.length > 254 || phone.length > 30) {
+    return { success: false, error: "One or more fields exceed the maximum length." };
+  }
+  if (about && about.length > 2000) {
+    return { success: false, error: "The 'about' field must be under 2000 characters." };
+  }
+
+  // Enum validation
+  if (!VALID_EMPLOYMENT.includes(data.employment_status)) {
+    return { success: false, error: "Invalid employment status." };
+  }
+  if (!VALID_INCOME.includes(data.income_range)) {
+    return { success: false, error: "Invalid income range." };
+  }
+  if (!["1", "2"].includes(data.occupants)) {
+    return { success: false, error: "Invalid occupants value." };
+  }
+  if (!["yes", "no"].includes(data.has_pets) || !["yes", "no"].includes(data.background_check_consent)) {
+    return { success: false, error: "Invalid selection." };
+  }
+
+  try {
+    db.query(
+      `INSERT INTO inquiries (room_id, name, email, phone, employment_status, income_range, desired_move_in, occupants, has_pets, background_check_consent, about)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      data.room_id,
+      name,
+      email,
+      phone,
+      data.employment_status,
+      data.income_range,
+      data.desired_move_in,
+      data.occupants,
+      data.has_pets,
+      data.background_check_consent,
+      about
+    );
+    return { success: true };
+  } catch {
+    return { success: false, error: "Something went wrong. Please try again." };
+  }
+}
+
+export async function getInquiries(): Promise<(Inquiry & { room_number: string; property_name: string })[]> {
+  await requireAuth();
+  const db = getDb();
+  return db
+    .query(
+      `SELECT i.*, r.room_number, p.name AS property_name
+       FROM inquiries i
+       JOIN rooms r ON i.room_id = r.id
+       JOIN properties p ON r.property_id = p.id
+       ORDER BY i.created_at DESC
+       LIMIT 200`
+    )
+    .all() as (Inquiry & { room_number: string; property_name: string })[];
+}
+
+export async function getInquiry(id: number): Promise<(Inquiry & { room_number: string; property_name: string; room_price: number; property_city: string }) | null> {
+  await requireAuth();
+  const db = getDb();
+  return (db
+    .query(
+      `SELECT i.*, r.room_number, r.price AS room_price, p.name AS property_name, p.city AS property_city
+       FROM inquiries i
+       JOIN rooms r ON i.room_id = r.id
+       JOIN properties p ON r.property_id = p.id
+       WHERE i.id = ?`
+    )
+    .get(id) as (Inquiry & { room_number: string; property_name: string; room_price: number; property_city: string })) ?? null;
+}
+
+export async function updateInquiryStatus(id: number, status: string): Promise<void> {
+  await requireAuth();
+  if (!(INQUIRY_STATUSES as readonly string[]).includes(status)) return;
+  const db = getDb();
+  db.query("UPDATE inquiries SET status = ? WHERE id = ?").run(status, id);
+  revalidatePath("/admin/inquiries");
+  revalidatePath(`/admin/inquiries/${id}`);
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────

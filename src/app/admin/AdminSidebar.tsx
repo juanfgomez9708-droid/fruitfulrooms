@@ -11,6 +11,7 @@ const navItems = [
   { href: "/admin/rooms", label: "Rooms", icon: "🚪" },
   { href: "/admin/tenants", label: "Tenants", icon: "👤" },
   { href: "/admin/payments", label: "Payments", icon: "💰" },
+  { href: "/admin/inquiries", label: "Inquiries", icon: "📋" },
 ];
 
 export function AdminSidebar() {

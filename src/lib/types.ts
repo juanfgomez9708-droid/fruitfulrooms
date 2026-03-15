@@ -42,6 +42,23 @@ export interface Payment {
   created_at: string;
 }
 
+export interface Inquiry {
+  id: number;
+  room_id: number;
+  name: string;
+  email: string;
+  phone: string;
+  employment_status: "employed" | "self_employed" | "student" | "unemployed" | "retired";
+  income_range: "0_1000" | "1000_2000" | "2000_3000" | "3000_plus";
+  desired_move_in: string;
+  occupants: "1" | "2";
+  has_pets: "yes" | "no";
+  background_check_consent: "yes" | "no";
+  about: string | null;
+  status: "new" | "reviewed" | "contacted" | "rejected";
+  created_at: string;
+}
+
 export interface DashboardStats {
   totalProperties: number;
   totalRooms: number;

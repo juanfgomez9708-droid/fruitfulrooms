@@ -289,6 +289,25 @@ function initSchema(db: Database): void {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS inquiries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      employment_status TEXT NOT NULL,
+      income_range TEXT NOT NULL,
+      desired_move_in TEXT NOT NULL,
+      occupants TEXT NOT NULL DEFAULT '1',
+      has_pets TEXT NOT NULL DEFAULT 'no',
+      background_check_consent TEXT NOT NULL DEFAULT 'no',
+      about TEXT,
+      status TEXT NOT NULL DEFAULT 'new',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
