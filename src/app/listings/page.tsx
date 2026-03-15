@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getPublicProperties } from "@/lib/actions";
+import { PublicHeader } from "@/app/components/PublicHeader";
+import { PublicFooter } from "@/app/components/PublicFooter";
 
 export const metadata = {
   title: "Available Rooms for Rent in Florida",
@@ -19,20 +21,7 @@ export default async function ListingsPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      {/* Header */}
-      <header className="border-b border-card-border bg-card-bg">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold bg-gradient-to-r from-gradient-start via-gradient-mid to-gradient-end bg-clip-text text-transparent font-brand lowercase">
-            Fruitful Rooms
-          </Link>
-          <Link
-            href="/listings"
-            className="text-sm font-medium text-foreground"
-          >
-            Browse Rooms
-          </Link>
-        </div>
-      </header>
+      <PublicHeader />
 
       {/* Main Content */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
@@ -115,18 +104,7 @@ export default async function ListingsPage() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-card-border py-6 px-4 mt-auto">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted">
-          <p>&copy; {new Date().getFullYear()} Fruitful Rooms Rentals. All rights reserved.</p>
-          <Link
-            href="/admin"
-            className="text-xs text-muted/50 hover:text-muted transition-colors"
-          >
-            Admin
-          </Link>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

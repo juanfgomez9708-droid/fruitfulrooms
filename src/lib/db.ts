@@ -319,4 +319,10 @@ function initSchema(db: Database): void {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
+
+  // Indexes for common query patterns
+  db.run(`CREATE INDEX IF NOT EXISTS idx_rooms_property_status ON rooms(property_id, status)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_inquiries_room_id ON inquiries(room_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_tenants_room_id ON tenants(room_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_payments_tenant_id ON payments(tenant_id)`);
 }
