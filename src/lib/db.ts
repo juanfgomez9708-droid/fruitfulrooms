@@ -43,6 +43,16 @@ export function getDb(): Database {
   migrateShadyAcresRooms(db);
   migrateCadillacRooms(db);
 
+  // Migration: add photos column to rooms (JSON array of photo paths)
+  try {
+    db.run("ALTER TABLE rooms ADD COLUMN photos TEXT");
+  } catch {
+    // Column already exists
+  }
+
+  // Migration: Cadillac House photos (2026-03-16)
+  migrateCadillacPhotos(db);
+
   return db;
 }
 
@@ -245,6 +255,42 @@ function migrateContientalRooms(db: Database): void {
   );
   for (const u of updates) {
     stmt.run(u.price, u.status, continental.id, u.room);
+  }
+}
+
+function migrateCadillacPhotos(db: Database): void {
+  const cadillac = db.query("SELECT id FROM properties WHERE name = 'Cadillac House'").get() as { id: number } | null;
+  if (!cadillac) return;
+
+  // Set property hero photo (house exterior)
+  const prop = db.query("SELECT photo_url FROM properties WHERE id = ?").get(cadillac.id) as { photo_url: string | null } | null;
+  if (prop && !prop.photo_url) {
+    db.prepare("UPDATE properties SET photo_url = ? WHERE id = ?").run("/photos/cadillac-house/12-house.jpg", cadillac.id);
+  }
+
+  // Set Room 6 photos (ordered: bedroom, kitchen, bathroom, house, hallway, washer/dryer)
+  const room6 = db.query(
+    "SELECT id, photos FROM rooms WHERE property_id = ? AND room_number = 'Room 6'"
+  ).get(cadillac.id) as { id: number; photos: string | null } | null;
+
+  if (room6 && !room6.photos) {
+    const photos = JSON.stringify([
+      "/photos/cadillac-house/01-bedroom.jpg",
+      "/photos/cadillac-house/02-bedroom.jpg",
+      "/photos/cadillac-house/03-bedroom.jpg",
+      "/photos/cadillac-house/04-bedroom.jpg",
+      "/photos/cadillac-house/05-kitchen.jpg",
+      "/photos/cadillac-house/06-kitchen.jpg",
+      "/photos/cadillac-house/07-kitchen.jpg",
+      "/photos/cadillac-house/08-bathroom.jpg",
+      "/photos/cadillac-house/09-bathroom.jpg",
+      "/photos/cadillac-house/10-bathroom.jpg",
+      "/photos/cadillac-house/11-bathroom.jpg",
+      "/photos/cadillac-house/12-house.jpg",
+      "/photos/cadillac-house/13-hallway.jpg",
+      "/photos/cadillac-house/14-washer-dryer.jpg",
+    ]);
+    db.prepare("UPDATE rooms SET photos = ?, photo_url = ? WHERE id = ?").run(photos, "/photos/cadillac-house/01-bedroom.jpg", room6.id);
   }
 }
 

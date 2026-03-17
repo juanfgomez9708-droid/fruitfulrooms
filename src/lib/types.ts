@@ -16,6 +16,7 @@ export interface Room {
   status: "vacant" | "occupied" | "maintenance";
   amenities: string | null; // JSON array as string
   photo_url: string | null;
+  photos: string | null; // JSON array of photo paths
   description: string | null;
   created_at: string;
 }

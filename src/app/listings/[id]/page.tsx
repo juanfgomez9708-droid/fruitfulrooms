@@ -6,6 +6,7 @@ import { parseAmenities } from "@/lib/utils";
 import { PublicHeader } from "@/app/components/PublicHeader";
 import { PublicFooter } from "@/app/components/PublicFooter";
 import { InquiryForm } from "./InquiryForm";
+import { PhotoGallery } from "./PhotoGallery";
 
 const getCachedRoom = cache((id: number) => getPublicRoom(id));
 const getCachedProperty = cache((id: number) => getPublicProperty(id));
@@ -72,8 +73,13 @@ export default async function ListingDetailPage({
           <span className="text-foreground">{room.room_number}</span>
         </nav>
 
-        {/* Photo */}
-        {room.photo_url ? (
+        {/* Photos */}
+        {room.photos ? (
+          <PhotoGallery
+            photos={JSON.parse(room.photos)}
+            alt={`${room.room_number} at ${property?.name}`}
+          />
+        ) : room.photo_url ? (
           <img
             src={room.photo_url}
             alt={`Room ${room.room_number}`}
