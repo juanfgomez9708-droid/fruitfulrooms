@@ -38,7 +38,7 @@ function seed() {
       address: "1241 Cadillac Dr, Daytona Beach, FL 32117",
       city: "Daytona Beach, FL",
       description:
-        "Spacious two-story co-living home located about 15 minutes from the Daytona Beach shoreline. Comfortable shared living with modern amenities and convenient access to major roads, shopping, and hospitals. Approx. 2,600 sq ft two-story single-family home with 8 bedrooms and 2 bathrooms (one private). Shared amenities include washer/dryer, central AC, shared kitchen, living room, backyard, parking in front, smart locks, and outdoor security cameras. Utilities included: Wi-Fi, electricity, water. Move-in fee: $199, no security deposit.",
+        "Spacious two-story co-living home located about 15 minutes from the Daytona Beach shoreline. Comfortable shared living with modern amenities and convenient access to major roads, shopping, and hospitals. Approx. 2,600 sq ft two-story single-family home with 8 bedrooms and 3 shared bathrooms. Shared amenities include washer/dryer, central AC, shared kitchen, living room, backyard, parking in front, smart locks, and outdoor security cameras. Utilities included: Wi-Fi, electricity, water. Move-in fee: $199, no security deposit.",
     },
   ];
 

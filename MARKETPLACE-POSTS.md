@@ -888,7 +888,7 @@ Email: rentals@fruitfulhomeoffers.com
 
 📍 15 minutes from the Daytona Beach shoreline, convenient access to major roads, shopping, and hospitals.
 
-🏡 ~2,600 sq ft two-story single-family home with 8 bedrooms and 2 bathrooms (one private).
+🏡 ~2,600 sq ft two-story single-family home with 8 bedrooms and 3 shared bathrooms.
 
 👉 Apply online: https://fruitfulrooms.com/listings/[room-id]
 📞 Call/Text: (386) 260-4229
@@ -926,7 +926,7 @@ SHARED AMENITIES:
 
 LOCATION: 15 minutes from the Daytona Beach shoreline, convenient access to major roads, shopping, and hospitals.
 
-HOUSE: ~2,600 sq ft, 8 bed / 2 bath (one private) two-story single-family home
+HOUSE: ~2,600 sq ft, 8 bed / 3 bath (shared) two-story single-family home
 
 REQUIREMENTS:
 - Background check consent required

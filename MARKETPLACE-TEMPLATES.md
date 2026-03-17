@@ -131,7 +131,7 @@ More info & apply: https://fruitfulrooms.com/listings/[room-id]
 | Woodcrest House | Ormond Beach, FL | ~1,000 | 4 | 2 (1 private) | 15 min from beach, near major roads & shopping |
 | Continental House | Orlando, FL | ~1,600 | 8 | 2 | 15 min from Downtown Orlando, near highways & transit |
 | Shady Acres House | Mulberry, FL | ~1,800 | 5 | 2 (1 private) | 15-20 min from Lakeland, near grocery & essentials |
-| Cadillac House | Daytona Beach, FL | ~2,600 | 8 | 2 (1 private) | 15 min from Daytona Beach shoreline, near shopping & hospitals |
+| Cadillac House | Daytona Beach, FL | ~2,600 | 8 | 3 shared | 15 min from Daytona Beach shoreline, near shopping & hospitals |
 
 ## Tips
 
