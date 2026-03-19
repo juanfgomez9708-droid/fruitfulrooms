@@ -56,6 +56,9 @@ export function getDb(): Database {
   // Migration: Cadillac House photos (2026-03-16)
   migrateCadillacPhotos(db);
 
+  // Migration: Seed existing tenants (2026-03-18)
+  migrateTenants(db);
+
   return db;
 }
 
@@ -305,6 +308,47 @@ function migrateCadillacPhotos(db: Database): void {
       "/photos/cadillac-house/14-washer-dryer.jpg",
     ]);
     db.prepare("UPDATE rooms SET photos = ?, photo_url = ? WHERE id = ?").run(photos, "/photos/cadillac-house/01-bedroom.jpg", room6.id);
+  }
+}
+
+function migrateTenants(db: Database): void {
+  // Only run if no tenants exist yet
+  const count = (db.query("SELECT COUNT(*) as count FROM tenants").get() as { count: number }).count;
+  if (count > 0) return;
+
+  const tenants = [
+    // Woodcrest House
+    { property: "Woodcrest House", room: "Room 2", name: "John Painter", email: "shadoteam03@gmail.com", phone: "(321) 262-5320", move_in_date: null },
+    { property: "Woodcrest House", room: "Room 4", name: "Jack Bulson Jr", email: "jackbulson2@gmail.com", phone: "(407) 435-9127", move_in_date: "2025-11-01" },
+    // Continental House
+    { property: "Continental House", room: "Room 2", name: "Antawuan Tramain Forrest Sr", email: "Wethebest1982@gmail.com", phone: "(321) 557-8278", move_in_date: "2024-10-01" },
+    { property: "Continental House", room: "Room 4", name: "George Alberto Carrillo", email: "gteknet@gmail.com", phone: "(407) 900-1750", move_in_date: "2024-01-01" },
+    { property: "Continental House", room: "Room 8", name: "Demair Maitland", email: "dem.air@hotmail.com", phone: "(954) 831-9337", move_in_date: "2024-03-01" },
+    // Shady Acres House
+    { property: "Shady Acres House", room: "Room 2", name: "Onel Lopez Pacheco", email: "chagui83@gmail.com", phone: "(813) 713-6913", move_in_date: "2024-09-01" },
+    // Cadillac House
+    { property: "Cadillac House", room: "Room 1", name: "Cassandra Reinoso", email: null, phone: "(904) 850-2961", move_in_date: "2026-02-01" },
+    { property: "Cadillac House", room: "Room 2", name: "Doris Dixon", email: null, phone: "(630) 391-1495", move_in_date: "2025-08-01" },
+    { property: "Cadillac House", room: "Room 3", name: "Amya Bourgeois", email: null, phone: "(832) 423-2890", move_in_date: "2025-09-01" },
+    { property: "Cadillac House", room: "Room 4", name: "Tristen Saunders-Hall", email: null, phone: "(718) 219-8150", move_in_date: "2026-01-01" },
+    { property: "Cadillac House", room: "Room 5", name: "Austin Ash", email: null, phone: "(386) 523-8765", move_in_date: "2026-01-01" },
+    { property: "Cadillac House", room: "Room 6", name: "Dequan Pace", email: null, phone: "(352) 494-2916", move_in_date: "2026-02-02" },
+    { property: "Cadillac House", room: "Room 8", name: "Anthony Bryant", email: null, phone: "(386) 220-1043", move_in_date: "2025-11-01" },
+  ];
+
+  const findRoom = db.prepare(
+    "SELECT r.id FROM rooms r JOIN properties p ON r.property_id = p.id WHERE p.name = ? AND r.room_number = ?"
+  );
+  const insertTenant = db.prepare(
+    "INSERT INTO tenants (name, email, phone, room_id, move_in_date, status) VALUES (?, ?, ?, ?, ?, 'active')"
+  );
+  const updateRoom = db.prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?");
+
+  for (const t of tenants) {
+    const room = findRoom.get(t.property, t.room) as { id: number } | null;
+    if (!room) continue;
+    insertTenant.run(t.name, t.email, t.phone, room.id, t.move_in_date);
+    updateRoom.run(room.id);
   }
 }
 
