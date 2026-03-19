@@ -2,23 +2,28 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getExpenses, getProperties, createExpense, deleteExpense } from "@/lib/actions";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
-import { getCurrentMonth } from "@/lib/utils";
+import { getCurrentMonth, TIME_PERIODS, getDateRange, type TimePeriod } from "@/lib/utils";
 
 const categoryLabels = Object.fromEntries(EXPENSE_CATEGORIES.map((c) => [c.value, c.label]));
 
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ property?: string; month?: string }>;
+  searchParams: Promise<{ property?: string; month?: string; period?: string }>;
 }) {
   const params = await searchParams;
   const properties = await getProperties();
   const selectedProperty = params.property ? Number(params.property) : undefined;
+  const selectedPeriod = (params.period || "monthly") as TimePeriod;
   const selectedMonth = params.month || getCurrentMonth();
 
-  const expenses = await getExpenses(selectedProperty, selectedMonth);
+  const range = getDateRange(selectedPeriod, selectedMonth);
+  const expenses = range
+    ? await getExpenses(selectedProperty, range.startMonth, range.endMonth)
+    : await getExpenses(selectedProperty);
 
-  const totalForMonth = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const periodLabel = range?.label || "All Time";
 
   async function addExpense(formData: FormData) {
     "use server";
@@ -42,7 +47,7 @@ export default async function ExpensesPage({
     "use server";
     const id = Number(formData.get("id"));
     await deleteExpense(id);
-    redirect(`/admin/expenses?month=${selectedMonth}${selectedProperty ? `&property=${selectedProperty}` : ""}`);
+    redirect(`/admin/expenses?period=${selectedPeriod}&month=${selectedMonth}${selectedProperty ? `&property=${selectedProperty}` : ""}`);
   }
 
   return (
@@ -74,14 +79,30 @@ export default async function ExpensesPage({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
-            <input
-              type="month"
-              name="month"
-              defaultValue={selectedMonth}
+            <label className="block text-sm font-medium text-gray-700 mb-1">Time Period</label>
+            <select
+              name="period"
+              defaultValue={selectedPeriod}
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            >
+              {TIME_PERIODS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
           </div>
+          {(selectedPeriod === "monthly" || selectedPeriod === "annual") && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {selectedPeriod === "annual" ? "Year" : "Month"}
+              </label>
+              <input
+                type="month"
+                name="month"
+                defaultValue={selectedMonth}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
           <button
             type="submit"
             className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
@@ -171,10 +192,10 @@ export default async function ExpensesPage({
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">
-                {selectedMonth} Expenses
+                {periodLabel} Expenses
               </h2>
               <span className="text-lg font-bold text-red-600">
-                ${totalForMonth.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                ${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
 
@@ -187,6 +208,7 @@ export default async function ExpensesPage({
                     <tr className="border-b border-gray-200 text-left text-gray-500">
                       <th className="pb-2 font-medium">Property</th>
                       <th className="pb-2 font-medium">Category</th>
+                      <th className="pb-2 font-medium">Month</th>
                       <th className="pb-2 font-medium text-right">Amount</th>
                       <th className="pb-2 font-medium">Notes</th>
                       <th className="pb-2 font-medium">Actions</th>
@@ -200,6 +222,7 @@ export default async function ExpensesPage({
                       >
                         <td className="py-2 font-medium text-gray-900">{expense.property_name}</td>
                         <td className="py-2 text-gray-600">{categoryLabels[expense.category] ?? expense.category}</td>
+                        <td className="py-2 text-gray-500">{expense.month}</td>
                         <td className="py-2 text-right font-medium">${expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                         <td className="py-2 text-gray-500 text-xs max-w-[200px] truncate">{expense.notes ?? "-"}</td>
                         <td className="py-2">

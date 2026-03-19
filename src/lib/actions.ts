@@ -370,22 +370,42 @@ export async function deleteTenant(id: number): Promise<void> {
 
 // ─── Payments ────────────────────────────────────────────────────────────────
 
-export async function getPayments(tenantId?: number, propertyId?: number): Promise<Payment[]> {
+export async function getPayments(tenantId?: number, propertyId?: number, startMonth?: string, endMonth?: string): Promise<Payment[]> {
   await requireAuth();
   const db = getDb();
-  if (tenantId) {
-    return db
-      .query("SELECT * FROM payments WHERE tenant_id = ? ORDER BY due_date DESC")
-      .all(tenantId) as Payment[];
-  }
+  let sql: string;
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
   if (propertyId) {
-    return db
-      .query(
-        "SELECT p.* FROM payments p JOIN tenants t ON p.tenant_id = t.id JOIN rooms r ON t.room_id = r.id WHERE r.property_id = ? ORDER BY p.due_date DESC"
-      )
-      .all(propertyId) as Payment[];
+    sql = "SELECT p.* FROM payments p JOIN tenants t ON p.tenant_id = t.id JOIN rooms r ON t.room_id = r.id";
+    conditions.push("r.property_id = ?");
+    params.push(propertyId);
+  } else if (tenantId) {
+    sql = "SELECT * FROM payments";
+    conditions.push("tenant_id = ?");
+    params.push(tenantId);
+  } else {
+    sql = "SELECT * FROM payments";
   }
-  return db.query("SELECT * FROM payments ORDER BY due_date DESC").all() as Payment[];
+
+  if (startMonth && endMonth && startMonth !== endMonth) {
+    const alias = propertyId ? "p." : "";
+    conditions.push(`strftime('%Y-%m', ${alias}due_date) >= ? AND strftime('%Y-%m', ${alias}due_date) <= ?`);
+    params.push(startMonth, endMonth);
+  } else if (startMonth) {
+    const alias = propertyId ? "p." : "";
+    conditions.push(`strftime('%Y-%m', ${alias}due_date) = ?`);
+    params.push(startMonth);
+  }
+
+  if (conditions.length > 0) {
+    sql += " WHERE " + conditions.join(" AND ");
+  }
+  const alias = propertyId ? "p." : "";
+  sql += ` ORDER BY ${alias}due_date DESC`;
+
+  return db.query(sql).all(...params) as Payment[];
 }
 
 export async function createPayment(data: {
@@ -623,7 +643,7 @@ export async function createBulkExpenses(
 
 // ─── Expenses ────────────────────────────────────────────────────────────────
 
-export async function getExpenses(propertyId?: number, month?: string): Promise<(Expense & { property_name: string })[]> {
+export async function getExpenses(propertyId?: number, month?: string, endMonth?: string): Promise<(Expense & { property_name: string })[]> {
   await requireAuth();
   const db = getDb();
   let sql = `SELECT e.*, p.name AS property_name FROM expenses e JOIN properties p ON e.property_id = p.id`;
@@ -634,7 +654,10 @@ export async function getExpenses(propertyId?: number, month?: string): Promise<
     conditions.push("e.property_id = ?");
     params.push(propertyId);
   }
-  if (month) {
+  if (month && endMonth && month !== endMonth) {
+    conditions.push("e.month >= ? AND e.month <= ?");
+    params.push(month, endMonth);
+  } else if (month) {
     conditions.push("e.month = ?");
     params.push(month);
   }
