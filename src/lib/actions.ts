@@ -582,11 +582,17 @@ export async function createBulkPayments(
 ): Promise<void> {
   await requireAuth();
   const db = getDb();
+  const checkDup = db.prepare(
+    "SELECT id FROM payments WHERE tenant_id = ? AND due_date = ? LIMIT 1"
+  );
   const stmt = db.prepare(
     "INSERT INTO payments (tenant_id, amount, due_date, status, paid_date) VALUES (?, ?, ?, ?, ?)"
   );
   const tx = db.transaction(() => {
     for (const e of entries) {
+      if (e.amount <= 0) continue;
+      const existing = checkDup.get(e.tenant_id, e.due_date);
+      if (existing) continue;
       stmt.run(e.tenant_id, e.amount, e.due_date, e.status, e.paid_date);
     }
   });

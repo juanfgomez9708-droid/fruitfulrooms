@@ -33,7 +33,7 @@ export default async function BulkPaymentsPage({
       const due_date = formData.get(`due_date_${i}`) as string;
       const mark_paid = formData.get(`mark_paid_${i}`);
 
-      if (!tenant_id || !amount || !due_date) continue;
+      if (!tenant_id || !amount || amount <= 0 || !due_date) continue;
 
       entries.push({
         tenant_id,
