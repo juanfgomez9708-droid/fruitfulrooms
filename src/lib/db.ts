@@ -62,6 +62,9 @@ export function getDb(): Database {
   // Migration: Fix Woodcrest move-in dates (2026-03-18)
   migrateFixWoodcrestDates(db);
 
+  // Migration: Move Dequan Pace from Room 6 to Room 7 at Cadillac (2026-03-18)
+  migrateFixDequanRoom(db);
+
   return db;
 }
 
@@ -335,7 +338,7 @@ function migrateTenants(db: Database): void {
     { property: "Cadillac House", room: "Room 3", name: "Amya Bourgeois", email: null, phone: "(832) 423-2890", move_in_date: "2025-09-01" },
     { property: "Cadillac House", room: "Room 4", name: "Tristen Saunders-Hall", email: null, phone: "(718) 219-8150", move_in_date: "2026-01-01" },
     { property: "Cadillac House", room: "Room 5", name: "Austin Ash", email: null, phone: "(386) 523-8765", move_in_date: "2026-01-01" },
-    { property: "Cadillac House", room: "Room 6", name: "Dequan Pace", email: null, phone: "(352) 494-2916", move_in_date: "2026-02-02" },
+    { property: "Cadillac House", room: "Room 7", name: "Dequan Pace", email: null, phone: "(352) 494-2916", move_in_date: "2026-02-02" },
     { property: "Cadillac House", room: "Room 8", name: "Anthony Bryant", email: null, phone: "(386) 220-1043", move_in_date: "2025-11-01" },
   ];
 
@@ -353,6 +356,24 @@ function migrateTenants(db: Database): void {
     insertTenant.run(t.name, t.email, t.phone, room.id, t.move_in_date);
     updateRoom.run(room.id);
   }
+}
+
+function migrateFixDequanRoom(db: Database): void {
+  const cadillac = db.query("SELECT id FROM properties WHERE name = 'Cadillac House'").get() as { id: number } | null;
+  if (!cadillac) return;
+
+  const room6 = db.query("SELECT id FROM rooms WHERE property_id = ? AND room_number = 'Room 6'").get(cadillac.id) as { id: number } | null;
+  const room7 = db.query("SELECT id FROM rooms WHERE property_id = ? AND room_number = 'Room 7'").get(cadillac.id) as { id: number } | null;
+  if (!room6 || !room7) return;
+
+  // Check if Dequan is still assigned to Room 6
+  const dequan = db.query("SELECT id, room_id FROM tenants WHERE name = 'Dequan Pace'").get() as { id: number; room_id: number } | null;
+  if (!dequan || dequan.room_id !== room6.id) return;
+
+  // Move Dequan to Room 7, set Room 6 vacant, Room 7 occupied
+  db.prepare("UPDATE tenants SET room_id = ? WHERE id = ?").run(room7.id, dequan.id);
+  db.prepare("UPDATE rooms SET status = 'vacant' WHERE id = ?").run(room6.id);
+  db.prepare("UPDATE rooms SET status = 'occupied' WHERE id = ?").run(room7.id);
 }
 
 function migrateFixWoodcrestDates(db: Database): void {
