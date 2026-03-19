@@ -349,13 +349,20 @@ export async function deleteTenant(id: number): Promise<void> {
 
 // ─── Payments ────────────────────────────────────────────────────────────────
 
-export async function getPayments(tenantId?: number): Promise<Payment[]> {
+export async function getPayments(tenantId?: number, propertyId?: number): Promise<Payment[]> {
   await requireAuth();
   const db = getDb();
   if (tenantId) {
     return db
       .query("SELECT * FROM payments WHERE tenant_id = ? ORDER BY due_date DESC")
       .all(tenantId) as Payment[];
+  }
+  if (propertyId) {
+    return db
+      .query(
+        "SELECT p.* FROM payments p JOIN tenants t ON p.tenant_id = t.id JOIN rooms r ON t.room_id = r.id WHERE r.property_id = ? ORDER BY p.due_date DESC"
+      )
+      .all(propertyId) as Payment[];
   }
   return db.query("SELECT * FROM payments ORDER BY due_date DESC").all() as Payment[];
 }
@@ -650,28 +657,38 @@ export async function deleteExpense(id: number): Promise<void> {
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
-export async function getDashboardStats(): Promise<DashboardStats> {
+export async function getDashboardStats(propertyId?: number): Promise<DashboardStats> {
   await requireAuth();
   const db = getDb();
 
-  const totalProperties = (
+  const propFilter = propertyId != null;
+
+  const totalProperties = propFilter ? 1 : (
     db.query("SELECT COUNT(*) as count FROM properties").get() as { count: number }
   ).count;
 
   const totalRooms = (
-    db.query("SELECT COUNT(*) as count FROM rooms").get() as { count: number }
+    db.query(
+      propFilter
+        ? "SELECT COUNT(*) as count FROM rooms WHERE property_id = ?"
+        : "SELECT COUNT(*) as count FROM rooms"
+    ).get(...(propFilter ? [propertyId] : [])) as { count: number }
   ).count;
 
   const totalTenants = (
-    db.query("SELECT COUNT(*) as count FROM tenants WHERE status = 'active'").get() as {
-      count: number;
-    }
+    db.query(
+      propFilter
+        ? "SELECT COUNT(*) as count FROM tenants t JOIN rooms r ON t.room_id = r.id WHERE t.status = 'active' AND r.property_id = ?"
+        : "SELECT COUNT(*) as count FROM tenants WHERE status = 'active'"
+    ).get(...(propFilter ? [propertyId] : [])) as { count: number }
   ).count;
 
   const occupiedRooms = (
-    db.query("SELECT COUNT(*) as count FROM rooms WHERE status = 'occupied'").get() as {
-      count: number;
-    }
+    db.query(
+      propFilter
+        ? "SELECT COUNT(*) as count FROM rooms WHERE status = 'occupied' AND property_id = ?"
+        : "SELECT COUNT(*) as count FROM rooms WHERE status = 'occupied'"
+    ).get(...(propFilter ? [propertyId] : [])) as { count: number }
   ).count;
 
   const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
@@ -679,23 +696,27 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const currentMonth = getCurrentMonth();
 
   const rentCollected = (
-    db.query("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid' AND strftime('%Y-%m', due_date) = ?").get(currentMonth) as {
-      total: number;
-    }
+    db.query(
+      propFilter
+        ? "SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p JOIN tenants t ON p.tenant_id = t.id JOIN rooms r ON t.room_id = r.id WHERE p.status = 'paid' AND strftime('%Y-%m', p.due_date) = ? AND r.property_id = ?"
+        : "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid' AND strftime('%Y-%m', due_date) = ?"
+    ).get(...(propFilter ? [currentMonth, propertyId] : [currentMonth])) as { total: number }
   ).total;
 
   const rentOutstanding = (
-    db
-      .query(
-        "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status IN ('upcoming', 'overdue') AND strftime('%Y-%m', due_date) = ?"
-      )
-      .get(currentMonth) as { total: number }
+    db.query(
+      propFilter
+        ? "SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p JOIN tenants t ON p.tenant_id = t.id JOIN rooms r ON t.room_id = r.id WHERE p.status IN ('upcoming', 'overdue') AND strftime('%Y-%m', p.due_date) = ? AND r.property_id = ?"
+        : "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status IN ('upcoming', 'overdue') AND strftime('%Y-%m', due_date) = ?"
+    ).get(...(propFilter ? [currentMonth, propertyId] : [currentMonth])) as { total: number }
   ).total;
 
   const totalExpenses = (
-    db
-      .query("SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE month = ?")
-      .get(currentMonth) as { total: number }
+    db.query(
+      propFilter
+        ? "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE month = ? AND property_id = ?"
+        : "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE month = ?"
+    ).get(...(propFilter ? [currentMonth, propertyId] : [currentMonth])) as { total: number }
   ).total;
 
   const netIncome = rentCollected - totalExpenses;

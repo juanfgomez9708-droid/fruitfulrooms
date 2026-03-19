@@ -1,17 +1,53 @@
-import { getDashboardStats, getPayments, getTenants } from "@/lib/actions";
+import { getDashboardStats, getPayments, getTenants, getProperties } from "@/lib/actions";
 
-export default async function DashboardPage() {
-  const stats = await getDashboardStats();
-  const payments = await getPayments();
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ property?: string }>;
+}) {
+  const params = await searchParams;
+  const properties = await getProperties();
+  const selectedProperty = params.property ? Number(params.property) : undefined;
+  const selectedPropertyName = selectedProperty
+    ? properties.find((p) => p.id === selectedProperty)?.name
+    : undefined;
+
+  const stats = await getDashboardStats(selectedProperty);
+  const payments = await getPayments(undefined, selectedProperty);
   const tenants = await getTenants();
 
-  const tenantMap = new Map(tenants.map((t) => [t.id, t.name]));
+  const tenantMap = new Map(tenants.map((t) => [t.id, t]));
+
   const overdueCount = payments.filter((p) => p.status === "overdue").length;
   const recentPayments = payments.slice(0, 5);
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Dashboard</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">
+          Dashboard{selectedPropertyName ? ` — ${selectedPropertyName}` : ""}
+        </h1>
+
+        {/* Property Filter */}
+        <form className="flex items-center gap-2">
+          <select
+            name="property"
+            defaultValue={selectedProperty ?? ""}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Properties</option>
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+          >
+            Filter
+          </button>
+        </form>
+      </div>
 
       {/* Stats cards */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -92,7 +128,7 @@ export default async function DashboardPage() {
                   key={p.id}
                   className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}
                 >
-                  <td className="py-2">{tenantMap.get(p.tenant_id) ?? "Unknown"}</td>
+                  <td className="py-2">{tenantMap.get(p.tenant_id)?.name ?? "Unknown"}</td>
                   <td className="py-2">${p.amount.toLocaleString()}</td>
                   <td className="py-2">{p.due_date}</td>
                   <td className="py-2">
