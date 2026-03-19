@@ -59,6 +59,9 @@ export function getDb(): Database {
   // Migration: Seed existing tenants (2026-03-18)
   migrateTenants(db);
 
+  // Migration: Fix Woodcrest move-in dates (2026-03-18)
+  migrateFixWoodcrestDates(db);
+
   return db;
 }
 
@@ -318,8 +321,8 @@ function migrateTenants(db: Database): void {
 
   const tenants = [
     // Woodcrest House
-    { property: "Woodcrest House", room: "Room 2", name: "John Painter", email: "shadoteam03@gmail.com", phone: "(321) 262-5320", move_in_date: null },
-    { property: "Woodcrest House", room: "Room 4", name: "Jack Bulson Jr", email: "jackbulson2@gmail.com", phone: "(407) 435-9127", move_in_date: "2025-11-01" },
+    { property: "Woodcrest House", room: "Room 2", name: "John Painter", email: "shadoteam03@gmail.com", phone: "(321) 262-5320", move_in_date: "2025-11-01" },
+    { property: "Woodcrest House", room: "Room 4", name: "Jack Bulson Jr", email: "jackbulson2@gmail.com", phone: "(407) 435-9127", move_in_date: "2024-06-01" },
     // Continental House
     { property: "Continental House", room: "Room 2", name: "Antawuan Tramain Forrest Sr", email: "Wethebest1982@gmail.com", phone: "(321) 557-8278", move_in_date: "2024-10-01" },
     { property: "Continental House", room: "Room 4", name: "George Alberto Carrillo", email: "gteknet@gmail.com", phone: "(407) 900-1750", move_in_date: "2024-01-01" },
@@ -349,6 +352,18 @@ function migrateTenants(db: Database): void {
     if (!room) continue;
     insertTenant.run(t.name, t.email, t.phone, room.id, t.move_in_date);
     updateRoom.run(room.id);
+  }
+}
+
+function migrateFixWoodcrestDates(db: Database): void {
+  // Fix: John Painter move-in = Nov 2025, Jack Bulson Jr = June 2024
+  const john = db.query("SELECT id, move_in_date FROM tenants WHERE name = 'John Painter'").get() as { id: number; move_in_date: string | null } | null;
+  if (john && !john.move_in_date) {
+    db.prepare("UPDATE tenants SET move_in_date = ? WHERE id = ?").run("2025-11-01", john.id);
+  }
+  const jack = db.query("SELECT id, move_in_date FROM tenants WHERE name = 'Jack Bulson Jr'").get() as { id: number; move_in_date: string | null } | null;
+  if (jack && jack.move_in_date === "2025-11-01") {
+    db.prepare("UPDATE tenants SET move_in_date = ? WHERE id = ?").run("2024-06-01", jack.id);
   }
 }
 
