@@ -21,12 +21,20 @@ export default async function PaymentsPage({
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Payments</h1>
-        <Link
-          href="/admin/payments/new"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          + Record Payment
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/admin/payments/bulk"
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
+            Bulk Entry
+          </Link>
+          <Link
+            href="/admin/payments/new"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            + Record Payment
+          </Link>
+        </div>
       </div>
 
       <PaymentFilters currentFilter={statusFilter ?? "all"} />

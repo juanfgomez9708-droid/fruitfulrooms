@@ -240,6 +240,27 @@ export async function getTenants(): Promise<Tenant[]> {
   return db.query("SELECT * FROM tenants ORDER BY created_at DESC").all() as Tenant[];
 }
 
+export async function getTenantsWithRooms(propertyId?: number): Promise<
+  (Tenant & { room_number: string; room_price: number; property_id: number; property_name: string })[]
+> {
+  await requireAuth();
+  const db = getDb();
+  let sql = `
+    SELECT t.*, r.room_number, r.price AS room_price, r.property_id, p.name AS property_name
+    FROM tenants t
+    JOIN rooms r ON t.room_id = r.id
+    JOIN properties p ON r.property_id = p.id
+    WHERE t.status = 'active'
+  `;
+  const params: number[] = [];
+  if (propertyId) {
+    sql += " AND r.property_id = ?";
+    params.push(propertyId);
+  }
+  sql += " ORDER BY p.name, r.room_number";
+  return db.query(sql).all(...params) as (Tenant & { room_number: string; room_price: number; property_id: number; property_name: string })[];
+}
+
 export async function getTenant(id: number): Promise<Tenant | null> {
   await requireAuth();
   const db = getDb();
@@ -552,6 +573,46 @@ export async function updateInquiryStatus(id: number, status: string): Promise<v
   db.query("UPDATE inquiries SET status = ? WHERE id = ?").run(status, id);
   revalidatePath("/admin/inquiries");
   revalidatePath(`/admin/inquiries/${id}`);
+}
+
+// ─── Bulk Operations ────────────────────────────────────────────────────────
+
+export async function createBulkPayments(
+  entries: { tenant_id: number; amount: number; due_date: string; status: "paid" | "upcoming"; paid_date: string | null }[]
+): Promise<void> {
+  await requireAuth();
+  const db = getDb();
+  const stmt = db.prepare(
+    "INSERT INTO payments (tenant_id, amount, due_date, status, paid_date) VALUES (?, ?, ?, ?, ?)"
+  );
+  const tx = db.transaction(() => {
+    for (const e of entries) {
+      stmt.run(e.tenant_id, e.amount, e.due_date, e.status, e.paid_date);
+    }
+  });
+  tx();
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin");
+}
+
+export async function createBulkExpenses(
+  entries: { property_id: number; category: string; amount: number; month: string; notes: string | null }[]
+): Promise<void> {
+  await requireAuth();
+  const db = getDb();
+  const stmt = db.prepare(
+    "INSERT INTO expenses (property_id, category, amount, month, notes) VALUES (?, ?, ?, ?, ?)"
+  );
+  const tx = db.transaction(() => {
+    for (const e of entries) {
+      if (!VALID_EXPENSE_CATEGORIES.includes(e.category)) continue;
+      if (!/^\d{4}-\d{2}$/.test(e.month)) continue;
+      stmt.run(e.property_id, e.category, e.amount, e.month, e.notes);
+    }
+  });
+  tx();
+  revalidatePath("/admin/expenses");
+  revalidatePath("/admin");
 }
 
 // ─── Expenses ────────────────────────────────────────────────────────────────

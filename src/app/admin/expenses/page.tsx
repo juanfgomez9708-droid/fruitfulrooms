@@ -47,7 +47,15 @@ export default async function ExpensesPage({
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Expenses</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
+        <Link
+          href="/admin/expenses/bulk"
+          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+        >
+          Bulk Entry
+        </Link>
+      </div>
 
       {/* Filters */}
       <div className="card mb-6">
