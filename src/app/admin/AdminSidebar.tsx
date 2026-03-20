@@ -12,6 +12,7 @@ const navItems = [
   { href: "/admin/tenants", label: "Tenants", icon: "👤" },
   { href: "/admin/payments", label: "Payments", icon: "💰" },
   { href: "/admin/expenses", label: "Expenses", icon: "📉" },
+  { href: "/admin/lock-codes", label: "Lock Codes", icon: "🔑" },
   { href: "/admin/inquiries", label: "Inquiries", icon: "📋" },
 ];
 

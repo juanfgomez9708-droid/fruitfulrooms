@@ -70,6 +70,15 @@ export interface Expense {
   created_at: string;
 }
 
+export interface LockCode {
+  id: number;
+  room_id: number;
+  code: string;
+  label: string;
+  tenant_id: number | null;
+  created_at: string;
+}
+
 export interface DashboardStats {
   totalProperties: number;
   totalRooms: number;

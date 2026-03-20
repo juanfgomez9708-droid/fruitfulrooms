@@ -5,7 +5,7 @@ import { getDb } from "./db";
 import { requireAuth } from "./auth";
 import { VALID_EMPLOYMENT, VALID_INCOME, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
 import { getCurrentMonth } from "./utils";
-import type { Property, Room, Tenant, Payment, Inquiry, Expense, DashboardStats } from "./types";
+import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats } from "./types";
 
 // ─── Properties ──────────────────────────────────────────────────────────────
 
@@ -743,6 +743,97 @@ export async function deleteExpense(id: number): Promise<void> {
   db.query("DELETE FROM expenses WHERE id = ?").run(id);
   revalidatePath("/admin/expenses");
   revalidatePath("/admin");
+}
+
+// ─── Lock Codes ──────────────────────────────────────────────────────────────
+
+export async function getLockCodes(roomId: number): Promise<(LockCode & { tenant_name: string | null })[]> {
+  await requireAuth();
+  const db = getDb();
+  return db
+    .query(
+      `SELECT lc.*, t.name AS tenant_name
+       FROM lock_codes lc
+       LEFT JOIN tenants t ON lc.tenant_id = t.id
+       WHERE lc.room_id = ?
+       ORDER BY lc.created_at`
+    )
+    .all(roomId) as (LockCode & { tenant_name: string | null })[];
+}
+
+export async function getAllLockCodesGrouped(propertyId?: number): Promise<
+  (LockCode & { tenant_name: string | null; room_number: string; property_name: string; property_id: number })[]
+> {
+  await requireAuth();
+  const db = getDb();
+  let sql = `
+    SELECT lc.*, t.name AS tenant_name, r.room_number, p.name AS property_name, r.property_id
+    FROM lock_codes lc
+    JOIN rooms r ON lc.room_id = r.id
+    JOIN properties p ON r.property_id = p.id
+    LEFT JOIN tenants t ON lc.tenant_id = t.id
+  `;
+  const params: number[] = [];
+  if (propertyId) {
+    sql += " WHERE r.property_id = ?";
+    params.push(propertyId);
+  }
+  sql += " ORDER BY p.name, r.room_number, lc.created_at";
+  return db.query(sql).all(...params) as (LockCode & {
+    tenant_name: string | null;
+    room_number: string;
+    property_name: string;
+    property_id: number;
+  })[];
+}
+
+export async function createLockCode(data: {
+  room_id: number;
+  code: string;
+  label: string;
+  tenant_id?: number | null;
+}): Promise<LockCode> {
+  await requireAuth();
+  const db = getDb();
+  const result = db
+    .query(
+      `INSERT INTO lock_codes (room_id, code, label, tenant_id)
+       VALUES (?, ?, ?, ?) RETURNING *`
+    )
+    .get(data.room_id, data.code, data.label, data.tenant_id ?? null) as LockCode;
+  revalidatePath("/admin/lock-codes");
+  return result;
+}
+
+export async function updateLockCode(
+  id: number,
+  data: { code?: string; label?: string; tenant_id?: number | null }
+): Promise<LockCode | null> {
+  await requireAuth();
+  const db = getDb();
+  const existing = (db.query("SELECT * FROM lock_codes WHERE id = ?").get(id) as LockCode) ?? null;
+  if (!existing) return null;
+
+  const result = db
+    .query(
+      `UPDATE lock_codes SET code = ?, label = ?, tenant_id = ?
+       WHERE id = ? RETURNING *`
+    )
+    .get(
+      data.code ?? existing.code,
+      data.label ?? existing.label,
+      data.tenant_id !== undefined ? data.tenant_id : existing.tenant_id,
+      id
+    ) as LockCode;
+  revalidatePath("/admin/lock-codes");
+  return result;
+}
+
+export async function deleteLockCode(id: number): Promise<void> {
+  await requireAuth();
+  const db = getDb();
+  db.query("DELETE FROM lock_codes WHERE id = ?").run(id);
+  revalidatePath("/admin/lock-codes");
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
