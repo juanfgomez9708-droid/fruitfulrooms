@@ -6,6 +6,7 @@ import { requireAuth } from "./auth";
 import { VALID_EMPLOYMENT, VALID_INCOME, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
 import { getCurrentMonth } from "./utils";
 import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats } from "./types";
+import { sendInquiryEmail } from "./email";
 
 // ─── Properties ──────────────────────────────────────────────────────────────
 
@@ -551,6 +552,29 @@ export async function submitInquiry(data: {
       data.background_check_consent,
       about
     );
+
+    // Send email notification (fire-and-forget — don't block the response)
+    const roomInfo = db.query(
+      `SELECT r.room_number, p.name AS property_name
+       FROM rooms r JOIN properties p ON r.property_id = p.id
+       WHERE r.id = ?`
+    ).get(data.room_id) as { room_number: string; property_name: string } | null;
+
+    sendInquiryEmail({
+      name,
+      email,
+      phone,
+      employment_status: data.employment_status,
+      income_range: data.income_range,
+      desired_move_in: data.desired_move_in,
+      occupants: data.occupants,
+      has_pets: data.has_pets,
+      background_check_consent: data.background_check_consent,
+      about,
+      room_number: roomInfo?.room_number ?? "Unknown",
+      property_name: roomInfo?.property_name ?? "Unknown",
+    }).catch(() => {}); // Silently swallow — DB insert already succeeded
+
     return { success: true };
   } catch {
     return { success: false, error: "Something went wrong. Please try again." };
