@@ -66,7 +66,7 @@ ${inquiry.about ? `<h3>About</h3><p style="font-family:sans-serif;font-size:14px
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Fruitful Rooms <onboarding@resend.dev>",
+        from: "Fruitful Rooms <team@fruitfulhomeoffers.com>",
         to: NOTIFY_EMAIL,
         subject: `New Inquiry: ${inquiry.name} — ${inquiry.property_name} ${inquiry.room_number}`,
         html,
