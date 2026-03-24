@@ -14,9 +14,9 @@ export interface Room {
   room_number: string;
   price: number;
   status: "vacant" | "occupied" | "maintenance";
-  amenities: string | null; // JSON array as string
+  amenities: string[] | null; // JSONB array from Supabase
   photo_url: string | null;
-  photos: string | null; // JSON array of photo paths
+  photos: string[] | null; // JSONB array of photo paths from Supabase
   description: string | null;
   created_at: string;
 }

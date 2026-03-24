@@ -1,25 +1,40 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDb } from "./db";
+import { supabase, supabaseAdmin } from "./supabase";
 import { requireAuth } from "./auth";
 import { VALID_EMPLOYMENT, VALID_INCOME, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
 import { getCurrentMonth } from "./utils";
 import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats } from "./types";
 import { sendInquiryEmail } from "./email";
 
+/** Returns the first day of the month after the given YYYY-MM string. */
+function nextMonthStart(yyyyMm: string): string {
+  const [y, m] = yyyyMm.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+}
+
 // ─── Properties ──────────────────────────────────────────────────────────────
 
 export async function getProperties(): Promise<Property[]> {
   await requireAuth();
-  const db = getDb();
-  return db.query("SELECT * FROM properties ORDER BY created_at DESC").all() as Property[];
+  const { data, error } = await supabaseAdmin
+    .from("properties")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as Property[];
 }
 
 export async function getProperty(id: number): Promise<Property | null> {
   await requireAuth();
-  const db = getDb();
-  return (db.query("SELECT * FROM properties WHERE id = ?").get(id) as Property) ?? null;
+  const { data, error } = await supabaseAdmin
+    .from("properties")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Property | null;
 }
 
 export async function createProperty(data: {
@@ -30,15 +45,21 @@ export async function createProperty(data: {
   photo_url?: string;
 }): Promise<Property> {
   await requireAuth();
-  const db = getDb();
-  const result = db
-    .query(
-      "INSERT INTO properties (name, address, city, description, photo_url) VALUES (?, ?, ?, ?, ?) RETURNING *"
-    )
-    .get(data.name, data.address, data.city, data.description ?? null, data.photo_url ?? null) as Property;
+  const { data: result, error } = await supabaseAdmin
+    .from("properties")
+    .insert({
+      name: data.name,
+      address: data.address,
+      city: data.city,
+      description: data.description ?? null,
+      photo_url: data.photo_url ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath("/admin/properties");
   revalidatePath("/admin");
-  return result;
+  return result as Property;
 }
 
 export async function updateProperty(
@@ -46,32 +67,32 @@ export async function updateProperty(
   data: { name?: string; address?: string; city?: string; description?: string; photo_url?: string }
 ): Promise<Property | null> {
   await requireAuth();
-  const db = getDb();
   const existing = await getProperty(id);
   if (!existing) return null;
 
-  const result = db
-    .query(
-      "UPDATE properties SET name = ?, address = ?, city = ?, description = ?, photo_url = ? WHERE id = ? RETURNING *"
-    )
-    .get(
-      data.name ?? existing.name,
-      data.address ?? existing.address,
-      data.city ?? existing.city,
-      data.description ?? existing.description,
-      data.photo_url ?? existing.photo_url,
-      id
-    ) as Property;
+  const { data: result, error } = await supabaseAdmin
+    .from("properties")
+    .update({
+      name: data.name ?? existing.name,
+      address: data.address ?? existing.address,
+      city: data.city ?? existing.city,
+      description: data.description ?? existing.description,
+      photo_url: data.photo_url ?? existing.photo_url,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath("/admin/properties");
   revalidatePath(`/admin/properties/${id}`);
   revalidatePath("/admin");
-  return result;
+  return result as Property;
 }
 
 export async function deleteProperty(id: number): Promise<void> {
   await requireAuth();
-  const db = getDb();
-  db.query("DELETE FROM properties WHERE id = ?").run(id);
+  const { error } = await supabaseAdmin.from("properties").delete().eq("id", id);
+  if (error) throw error;
   revalidatePath("/admin/properties");
   revalidatePath("/admin");
 }
@@ -80,29 +101,41 @@ export async function deleteProperty(id: number): Promise<void> {
 
 export async function getRooms(propertyId: number): Promise<Room[]> {
   await requireAuth();
-  const db = getDb();
-  return db
-    .query("SELECT * FROM rooms WHERE property_id = ? ORDER BY room_number")
-    .all(propertyId) as Room[];
+  const { data, error } = await supabaseAdmin
+    .from("rooms")
+    .select("*")
+    .eq("property_id", propertyId)
+    .order("room_number");
+  if (error) throw error;
+  return data as Room[];
 }
 
 export async function getAllRooms(): Promise<(Room & { property_name: string })[]> {
   await requireAuth();
-  const db = getDb();
-  return db
-    .query(
-      `SELECT r.*, p.name AS property_name
-       FROM rooms r
-       JOIN properties p ON r.property_id = p.id
-       ORDER BY p.name, r.room_number`
-    )
-    .all() as (Room & { property_name: string })[];
+  const { data, error } = await supabaseAdmin
+    .from("rooms")
+    .select("*, properties(name)")
+    .order("room_number");
+  if (error) throw error;
+  // Flatten: PostgREST returns { ...room, properties: { name } }
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const { properties: prop, ...room } = row;
+    return {
+      ...room,
+      property_name: (prop as { name: string })?.name ?? "",
+    };
+  }) as (Room & { property_name: string })[];
 }
 
 export async function getRoom(id: number): Promise<Room | null> {
   await requireAuth();
-  const db = getDb();
-  return (db.query("SELECT * FROM rooms WHERE id = ?").get(id) as Room) ?? null;
+  const { data, error } = await supabaseAdmin
+    .from("rooms")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Room | null;
 }
 
 export async function createRoom(data: {
@@ -115,26 +148,35 @@ export async function createRoom(data: {
   description?: string;
 }): Promise<Room> {
   await requireAuth();
-  const db = getDb();
-  const result = db
-    .query(
-      `INSERT INTO rooms (property_id, room_number, price, status, amenities, photo_url, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`
-    )
-    .get(
-      data.property_id,
-      data.room_number,
-      data.price,
-      data.status ?? "vacant",
-      data.amenities ?? null,
-      data.photo_url ?? null,
-      data.description ?? null
-    ) as Room;
+  // Parse amenities if passed as JSON string (from forms)
+  let amenities: string[] | null = null;
+  if (data.amenities) {
+    try {
+      amenities = JSON.parse(data.amenities);
+    } catch {
+      amenities = null;
+    }
+  }
+
+  const { data: result, error } = await supabaseAdmin
+    .from("rooms")
+    .insert({
+      property_id: data.property_id,
+      room_number: data.room_number,
+      price: data.price,
+      status: data.status ?? "vacant",
+      amenities,
+      photo_url: data.photo_url ?? null,
+      description: data.description ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath(`/admin/properties/${data.property_id}`);
   revalidatePath("/admin/rooms");
   revalidatePath("/admin");
   revalidatePath("/listings");
-  return result;
+  return result as Room;
 }
 
 export async function updateRoom(
@@ -149,36 +191,45 @@ export async function updateRoom(
   }
 ): Promise<Room | null> {
   await requireAuth();
-  const db = getDb();
   const existing = await getRoom(id);
   if (!existing) return null;
 
-  const result = db
-    .query(
-      `UPDATE rooms SET room_number = ?, price = ?, status = ?, amenities = ?, photo_url = ?, description = ?
-       WHERE id = ? RETURNING *`
-    )
-    .get(
-      data.room_number ?? existing.room_number,
-      data.price ?? existing.price,
-      data.status ?? existing.status,
-      data.amenities ?? existing.amenities,
-      data.photo_url ?? existing.photo_url,
-      data.description ?? existing.description,
-      id
-    ) as Room;
+  // Parse amenities if passed as JSON string
+  let amenities: string[] | null = existing.amenities;
+  if (data.amenities !== undefined) {
+    try {
+      amenities = data.amenities ? JSON.parse(data.amenities) : null;
+    } catch {
+      amenities = existing.amenities;
+    }
+  }
+
+  const { data: result, error } = await supabaseAdmin
+    .from("rooms")
+    .update({
+      room_number: data.room_number ?? existing.room_number,
+      price: data.price ?? existing.price,
+      status: data.status ?? existing.status,
+      amenities,
+      photo_url: data.photo_url ?? existing.photo_url,
+      description: data.description ?? existing.description,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath(`/admin/properties/${existing.property_id}`);
   revalidatePath("/admin/rooms");
   revalidatePath("/admin");
   revalidatePath("/listings");
-  return result;
+  return result as Room;
 }
 
 export async function deleteRoom(id: number): Promise<void> {
   await requireAuth();
-  const db = getDb();
   const room = await getRoom(id);
-  db.query("DELETE FROM rooms WHERE id = ?").run(id);
+  const { error } = await supabaseAdmin.from("rooms").delete().eq("id", id);
+  if (error) throw error;
   if (room) {
     revalidatePath(`/admin/properties/${room.property_id}`);
   }
@@ -188,84 +239,120 @@ export async function deleteRoom(id: number): Promise<void> {
 }
 
 export async function getVacantRooms(): Promise<(Room & { property_name: string; property_city: string })[]> {
-  const db = getDb();
-  return db
-    .query(
-      `SELECT r.*, p.name AS property_name, p.city AS property_city
-       FROM rooms r
-       JOIN properties p ON r.property_id = p.id
-       WHERE r.status = 'vacant'
-       ORDER BY r.price ASC`
-    )
-    .all() as (Room & { property_name: string; property_city: string })[];
+  await requireAuth();
+  const { data, error } = await supabaseAdmin
+    .from("rooms")
+    .select("*, properties(name, city)")
+    .eq("status", "vacant")
+    .order("price", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const { properties: prop, ...room } = row;
+    const p = prop as { name: string; city: string } | null;
+    return {
+      ...room,
+      property_name: p?.name ?? "",
+      property_city: p?.city ?? "",
+    };
+  }) as (Room & { property_name: string; property_city: string })[];
 }
 
 // ─── Public Read-Only (no auth required) ────────────────────────────────────
 
 export async function getPublicRoom(id: number): Promise<Room | null> {
-  const db = getDb();
-  return (db.query("SELECT * FROM rooms WHERE id = ?").get(id) as Room) ?? null;
+  const { data, error } = await supabase
+    .from("rooms")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Room | null;
 }
 
 export async function getPublicProperty(id: number): Promise<Property | null> {
-  const db = getDb();
-  return (db.query("SELECT * FROM properties WHERE id = ?").get(id) as Property) ?? null;
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Property | null;
 }
 
 export async function getPublicProperties(): Promise<(Property & { vacant_count: number; min_price: number })[]> {
-  const db = getDb();
-  return db
-    .query(
-      `SELECT p.*, COUNT(r.id) AS vacant_count, MIN(r.price) AS min_price
-       FROM properties p
-       JOIN rooms r ON r.property_id = p.id AND r.status = 'vacant'
-       GROUP BY p.id
-       HAVING vacant_count > 0
-       ORDER BY p.name`
-    )
-    .all() as (Property & { vacant_count: number; min_price: number })[];
+  const { data, error } = await supabase
+    .from("public_properties_with_vacancies")
+    .select("*");
+  if (error) throw error;
+  return (data ?? []) as (Property & { vacant_count: number; min_price: number })[];
 }
 
 export async function getPropertyVacantRooms(propertyId: number): Promise<Room[]> {
-  const db = getDb();
-  return db
-    .query("SELECT * FROM rooms WHERE property_id = ? AND status = 'vacant' ORDER BY price ASC")
-    .all(propertyId) as Room[];
+  const { data, error } = await supabase
+    .from("rooms")
+    .select("*")
+    .eq("property_id", propertyId)
+    .eq("status", "vacant")
+    .order("price", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Room[];
 }
 
 // ─── Tenants ─────────────────────────────────────────────────────────────────
 
 export async function getTenants(): Promise<Tenant[]> {
   await requireAuth();
-  const db = getDb();
-  return db.query("SELECT * FROM tenants ORDER BY created_at DESC").all() as Tenant[];
+  const { data, error } = await supabaseAdmin
+    .from("tenants")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as Tenant[];
 }
 
 export async function getTenantsWithRooms(propertyId?: number): Promise<
   (Tenant & { room_number: string; room_price: number; property_id: number; property_name: string })[]
 > {
   await requireAuth();
-  const db = getDb();
-  let sql = `
-    SELECT t.*, r.room_number, r.price AS room_price, r.property_id, p.name AS property_name
-    FROM tenants t
-    JOIN rooms r ON t.room_id = r.id
-    JOIN properties p ON r.property_id = p.id
-    WHERE t.status = 'active'
-  `;
-  const params: number[] = [];
+  let query = supabaseAdmin
+    .from("tenants")
+    .select("*, rooms(room_number, price, property_id, properties(name))")
+    .eq("status", "active")
+    .not("room_id", "is", null);
+
   if (propertyId) {
-    sql += " AND r.property_id = ?";
-    params.push(propertyId);
+    query = query.eq("rooms.property_id", propertyId);
   }
-  sql += " ORDER BY p.name, r.room_number";
-  return db.query(sql).all(...params) as (Tenant & { room_number: string; room_price: number; property_id: number; property_name: string })[];
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  // Flatten nested structure
+  return (data ?? [])
+    .map((row: Record<string, unknown>) => {
+      const { rooms: roomData, ...tenant } = row;
+      const r = roomData as { room_number: string; price: number; property_id: number; properties: { name: string } } | null;
+      if (!r) return null;
+      return {
+        ...tenant,
+        room_number: r.room_number,
+        room_price: r.price,
+        property_id: r.property_id,
+        property_name: r.properties?.name ?? "",
+      };
+    })
+    .filter(Boolean) as (Tenant & { room_number: string; room_price: number; property_id: number; property_name: string })[];
 }
 
 export async function getTenant(id: number): Promise<Tenant | null> {
   await requireAuth();
-  const db = getDb();
-  return (db.query("SELECT * FROM tenants WHERE id = ?").get(id) as Tenant) ?? null;
+  const { data, error } = await supabaseAdmin
+    .from("tenants")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Tenant | null;
 }
 
 export async function createTenant(data: {
@@ -277,30 +364,32 @@ export async function createTenant(data: {
   status?: string;
 }): Promise<Tenant> {
   await requireAuth();
-  const db = getDb();
-  const result = db
-    .query(
-      `INSERT INTO tenants (name, email, phone, room_id, move_in_date, status)
-       VALUES (?, ?, ?, ?, ?, ?) RETURNING *`
-    )
-    .get(
-      data.name,
-      data.email ?? null,
-      data.phone ?? null,
-      data.room_id ?? null,
-      data.move_in_date ?? null,
-      data.status ?? "active"
-    ) as Tenant;
+  const { data: result, error } = await supabaseAdmin
+    .from("tenants")
+    .insert({
+      name: data.name,
+      email: data.email ?? null,
+      phone: data.phone ?? null,
+      room_id: data.room_id ?? null,
+      move_in_date: data.move_in_date ?? null,
+      status: data.status ?? "active",
+    })
+    .select()
+    .single();
+  if (error) throw error;
 
   // Mark room as occupied if assigned
   if (data.room_id) {
-    db.query("UPDATE rooms SET status = 'occupied' WHERE id = ?").run(data.room_id);
+    await supabaseAdmin
+      .from("rooms")
+      .update({ status: "occupied" })
+      .eq("id", data.room_id);
     revalidatePath("/listings");
   }
 
   revalidatePath("/admin/tenants");
   revalidatePath("/admin");
-  return result;
+  return result as Tenant;
 }
 
 export async function updateTenant(
@@ -315,7 +404,6 @@ export async function updateTenant(
   }
 ): Promise<Tenant | null> {
   await requireAuth();
-  const db = getDb();
   const existing = await getTenant(id);
   if (!existing) return null;
 
@@ -324,47 +412,56 @@ export async function updateTenant(
   if (existing.room_id !== newRoomId) {
     // Free old room
     if (existing.room_id) {
-      db.query("UPDATE rooms SET status = 'vacant' WHERE id = ?").run(existing.room_id);
+      await supabaseAdmin
+        .from("rooms")
+        .update({ status: "vacant" })
+        .eq("id", existing.room_id);
     }
     // Occupy new room
     if (newRoomId) {
-      db.query("UPDATE rooms SET status = 'occupied' WHERE id = ?").run(newRoomId);
+      await supabaseAdmin
+        .from("rooms")
+        .update({ status: "occupied" })
+        .eq("id", newRoomId);
     }
     revalidatePath("/listings");
   }
 
-  const result = db
-    .query(
-      `UPDATE tenants SET name = ?, email = ?, phone = ?, room_id = ?, move_in_date = ?, status = ?
-       WHERE id = ? RETURNING *`
-    )
-    .get(
-      data.name ?? existing.name,
-      data.email ?? existing.email,
-      data.phone ?? existing.phone,
-      newRoomId,
-      data.move_in_date ?? existing.move_in_date,
-      data.status ?? existing.status,
-      id
-    ) as Tenant;
+  const { data: result, error } = await supabaseAdmin
+    .from("tenants")
+    .update({
+      name: data.name ?? existing.name,
+      email: data.email ?? existing.email,
+      phone: data.phone ?? existing.phone,
+      room_id: newRoomId,
+      move_in_date: data.move_in_date ?? existing.move_in_date,
+      status: data.status ?? existing.status,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath("/admin/tenants");
   revalidatePath(`/admin/tenants/${id}`);
   revalidatePath("/admin");
-  return result;
+  return result as Tenant;
 }
 
 export async function deleteTenant(id: number): Promise<void> {
   await requireAuth();
-  const db = getDb();
   const tenant = await getTenant(id);
 
   // Free the room if tenant was assigned
   if (tenant?.room_id) {
-    db.query("UPDATE rooms SET status = 'vacant' WHERE id = ?").run(tenant.room_id);
+    await supabaseAdmin
+      .from("rooms")
+      .update({ status: "vacant" })
+      .eq("id", tenant.room_id);
     revalidatePath("/listings");
   }
 
-  db.query("DELETE FROM tenants WHERE id = ?").run(id);
+  const { error } = await supabaseAdmin.from("tenants").delete().eq("id", id);
+  if (error) throw error;
   revalidatePath("/admin/tenants");
   revalidatePath("/admin");
 }
@@ -373,40 +470,49 @@ export async function deleteTenant(id: number): Promise<void> {
 
 export async function getPayments(tenantId?: number, propertyId?: number, startMonth?: string, endMonth?: string): Promise<Payment[]> {
   await requireAuth();
-  const db = getDb();
-  let sql: string;
-  const conditions: string[] = [];
-  const params: (string | number)[] = [];
 
   if (propertyId) {
-    sql = "SELECT p.* FROM payments p JOIN tenants t ON p.tenant_id = t.id JOIN rooms r ON t.room_id = r.id";
-    conditions.push("r.property_id = ?");
-    params.push(propertyId);
-  } else if (tenantId) {
-    sql = "SELECT * FROM payments";
-    conditions.push("tenant_id = ?");
-    params.push(tenantId);
-  } else {
-    sql = "SELECT * FROM payments";
+    // Need to filter payments through tenants→rooms→property
+    // Use a manual approach: get tenant IDs for the property, then filter payments
+    const { data: tenants } = await supabaseAdmin
+      .from("tenants")
+      .select("id, rooms!inner(property_id)")
+      .eq("rooms.property_id", propertyId);
+
+    const tenantIds = (tenants ?? []).map((t: Record<string, unknown>) => (t as { id: number }).id);
+    if (tenantIds.length === 0) return [];
+
+    let query = supabaseAdmin
+      .from("payments")
+      .select("*")
+      .in("tenant_id", tenantIds);
+
+    if (startMonth && endMonth && startMonth !== endMonth) {
+      query = query.gte("due_date", `${startMonth}-01`).lt("due_date", nextMonthStart(endMonth));
+    } else if (startMonth) {
+      query = query.gte("due_date", `${startMonth}-01`).lt("due_date", nextMonthStart(startMonth));
+    }
+
+    const { data, error } = await query.order("due_date", { ascending: false });
+    if (error) throw error;
+    return data as Payment[];
+  }
+
+  let query = supabaseAdmin.from("payments").select("*");
+
+  if (tenantId) {
+    query = query.eq("tenant_id", tenantId);
   }
 
   if (startMonth && endMonth && startMonth !== endMonth) {
-    const alias = propertyId ? "p." : "";
-    conditions.push(`strftime('%Y-%m', ${alias}due_date) >= ? AND strftime('%Y-%m', ${alias}due_date) <= ?`);
-    params.push(startMonth, endMonth);
+    query = query.gte("due_date", `${startMonth}-01`).lt("due_date", nextMonthStart(endMonth));
   } else if (startMonth) {
-    const alias = propertyId ? "p." : "";
-    conditions.push(`strftime('%Y-%m', ${alias}due_date) = ?`);
-    params.push(startMonth);
+    query = query.gte("due_date", `${startMonth}-01`).lt("due_date", nextMonthStart(startMonth));
   }
 
-  if (conditions.length > 0) {
-    sql += " WHERE " + conditions.join(" AND ");
-  }
-  const alias = propertyId ? "p." : "";
-  sql += ` ORDER BY ${alias}due_date DESC`;
-
-  return db.query(sql).all(...params) as Payment[];
+  const { data, error } = await query.order("due_date", { ascending: false });
+  if (error) throw error;
+  return data as Payment[];
 }
 
 export async function createPayment(data: {
@@ -418,23 +524,22 @@ export async function createPayment(data: {
   notes?: string;
 }): Promise<Payment> {
   await requireAuth();
-  const db = getDb();
-  const result = db
-    .query(
-      `INSERT INTO payments (tenant_id, amount, due_date, paid_date, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?) RETURNING *`
-    )
-    .get(
-      data.tenant_id,
-      data.amount,
-      data.due_date,
-      data.paid_date ?? null,
-      data.status ?? "upcoming",
-      data.notes ?? null
-    ) as Payment;
+  const { data: result, error } = await supabaseAdmin
+    .from("payments")
+    .insert({
+      tenant_id: data.tenant_id,
+      amount: data.amount,
+      due_date: data.due_date,
+      paid_date: data.paid_date ?? null,
+      status: data.status ?? "upcoming",
+      notes: data.notes ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath("/admin/payments");
   revalidatePath("/admin");
-  return result;
+  return result as Payment;
 }
 
 export async function updatePayment(
@@ -448,41 +553,49 @@ export async function updatePayment(
   }
 ): Promise<Payment | null> {
   await requireAuth();
-  const db = getDb();
-  const existing = (db.query("SELECT * FROM payments WHERE id = ?").get(id) as Payment) ?? null;
+  const { data: existing, error: fetchError } = await supabaseAdmin
+    .from("payments")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
   if (!existing) return null;
 
-  const result = db
-    .query(
-      `UPDATE payments SET amount = ?, due_date = ?, paid_date = ?, status = ?, notes = ?
-       WHERE id = ? RETURNING *`
-    )
-    .get(
-      data.amount ?? existing.amount,
-      data.due_date ?? existing.due_date,
-      data.paid_date !== undefined ? data.paid_date : existing.paid_date,
-      data.status ?? existing.status,
-      data.notes ?? existing.notes,
-      id
-    ) as Payment;
+  const ex = existing as Payment;
+  const { data: result, error } = await supabaseAdmin
+    .from("payments")
+    .update({
+      amount: data.amount ?? ex.amount,
+      due_date: data.due_date ?? ex.due_date,
+      paid_date: data.paid_date !== undefined ? data.paid_date : ex.paid_date,
+      status: data.status ?? ex.status,
+      notes: data.notes ?? ex.notes,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath("/admin/payments");
   revalidatePath("/admin");
-  return result;
+  return result as Payment;
 }
 
 export async function markPaymentPaid(id: number): Promise<Payment | null> {
   await requireAuth();
-  const db = getDb();
-  const result = db
-    .query(
-      `UPDATE payments SET status = 'paid', paid_date = datetime('now')
-       WHERE id = ? RETURNING *`
-    )
-    .get(id) as Payment | undefined;
+  const { data: result, error } = await supabaseAdmin
+    .from("payments")
+    .update({
+      status: "paid",
+      paid_date: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
   if (!result) return null;
   revalidatePath("/admin/payments");
   revalidatePath("/admin");
-  return result;
+  return result as Payment;
 }
 
 // ─── Inquiries ──────────────────────────────────────────────────────────────
@@ -500,9 +613,7 @@ export async function submitInquiry(data: {
   background_check_consent: string;
   about?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  // Public action — no auth required
-  const db = getDb();
-
+  // Public action — no auth required, uses anon client
   const name = data.name?.trim();
   const email = data.email?.trim().toLowerCase();
   const phone = data.phone?.trim();
@@ -536,29 +647,28 @@ export async function submitInquiry(data: {
   }
 
   try {
-    db.query(
-      `INSERT INTO inquiries (room_id, name, email, phone, employment_status, income_range, desired_move_in, occupants, has_pets, background_check_consent, about)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      data.room_id,
+    const { error } = await supabase.from("inquiries").insert({
+      room_id: data.room_id,
       name,
       email,
       phone,
-      data.employment_status,
-      data.income_range,
-      data.desired_move_in,
-      data.occupants,
-      data.has_pets,
-      data.background_check_consent,
-      about
-    );
+      employment_status: data.employment_status,
+      income_range: data.income_range,
+      desired_move_in: data.desired_move_in,
+      occupants: data.occupants,
+      has_pets: data.has_pets,
+      background_check_consent: data.background_check_consent,
+      about,
+    });
+    if (error) throw error;
 
     // Send email notification (fire-and-forget — don't block the response)
-    const roomInfo = db.query(
-      `SELECT r.room_number, p.name AS property_name
-       FROM rooms r JOIN properties p ON r.property_id = p.id
-       WHERE r.id = ?`
-    ).get(data.room_id) as { room_number: string; property_name: string } | null;
+    const { data: roomInfo } = await supabase
+      .from("rooms")
+      .select("room_number, properties(name)")
+      .eq("id", data.room_id)
+      .single();
+    const propName = ((roomInfo as Record<string, unknown>)?.properties as { name: string } | null)?.name ?? "Unknown";
 
     sendInquiryEmail({
       name,
@@ -572,7 +682,7 @@ export async function submitInquiry(data: {
       background_check_consent: data.background_check_consent,
       about,
       room_number: roomInfo?.room_number ?? "Unknown",
-      property_name: roomInfo?.property_name ?? "Unknown",
+      property_name: propName,
     }).catch(() => {}); // Silently swallow — DB insert already succeeded
 
     return { success: true };
@@ -583,38 +693,52 @@ export async function submitInquiry(data: {
 
 export async function getInquiries(): Promise<(Inquiry & { room_number: string; property_name: string })[]> {
   await requireAuth();
-  const db = getDb();
-  return db
-    .query(
-      `SELECT i.*, r.room_number, p.name AS property_name
-       FROM inquiries i
-       JOIN rooms r ON i.room_id = r.id
-       JOIN properties p ON r.property_id = p.id
-       ORDER BY i.created_at DESC
-       LIMIT 200`
-    )
-    .all() as (Inquiry & { room_number: string; property_name: string })[];
+  const { data, error } = await supabaseAdmin
+    .from("inquiries")
+    .select("*, rooms(room_number, properties(name))")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const { rooms: roomData, ...inquiry } = row;
+    const r = roomData as { room_number: string; properties: { name: string } } | null;
+    return {
+      ...inquiry,
+      room_number: r?.room_number ?? "",
+      property_name: r?.properties?.name ?? "",
+    };
+  }) as (Inquiry & { room_number: string; property_name: string })[];
 }
 
 export async function getInquiry(id: number): Promise<(Inquiry & { room_number: string; property_name: string; room_price: number; property_city: string }) | null> {
   await requireAuth();
-  const db = getDb();
-  return (db
-    .query(
-      `SELECT i.*, r.room_number, r.price AS room_price, p.name AS property_name, p.city AS property_city
-       FROM inquiries i
-       JOIN rooms r ON i.room_id = r.id
-       JOIN properties p ON r.property_id = p.id
-       WHERE i.id = ?`
-    )
-    .get(id) as (Inquiry & { room_number: string; property_name: string; room_price: number; property_city: string })) ?? null;
+  const { data, error } = await supabaseAdmin
+    .from("inquiries")
+    .select("*, rooms(room_number, price, properties(name, city))")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const { rooms: roomData, ...inquiry } = data as Record<string, unknown>;
+  const r = roomData as { room_number: string; price: number; properties: { name: string; city: string } } | null;
+  return {
+    ...inquiry,
+    room_number: r?.room_number ?? "",
+    room_price: r?.price ?? 0,
+    property_name: r?.properties?.name ?? "",
+    property_city: r?.properties?.city ?? "",
+  } as Inquiry & { room_number: string; property_name: string; room_price: number; property_city: string };
 }
 
 export async function updateInquiryStatus(id: number, status: string): Promise<void> {
   await requireAuth();
   if (!(INQUIRY_STATUSES as readonly string[]).includes(status)) return;
-  const db = getDb();
-  db.query("UPDATE inquiries SET status = ? WHERE id = ?").run(status, id);
+  const { error } = await supabaseAdmin
+    .from("inquiries")
+    .update({ status })
+    .eq("id", id);
+  if (error) throw error;
   revalidatePath("/admin/inquiries");
   revalidatePath(`/admin/inquiries/${id}`);
 }
@@ -625,22 +749,38 @@ export async function createBulkPayments(
   entries: { tenant_id: number; amount: number; due_date: string; status: "paid" | "upcoming"; paid_date: string | null }[]
 ): Promise<void> {
   await requireAuth();
-  const db = getDb();
-  const checkDup = db.prepare(
-    "SELECT id FROM payments WHERE tenant_id = ? AND due_date = ? LIMIT 1"
+
+  // Filter out invalid entries
+  const candidates = entries.filter((e) => e.amount > 0);
+  if (candidates.length === 0) return;
+
+  // Batch duplicate check: fetch all existing (tenant_id, due_date) pairs in one query
+  const tenantIds = [...new Set(candidates.map((e) => e.tenant_id))];
+  const dueDates = [...new Set(candidates.map((e) => e.due_date))];
+  const { data: existingPayments } = await supabaseAdmin
+    .from("payments")
+    .select("tenant_id, due_date")
+    .in("tenant_id", tenantIds)
+    .in("due_date", dueDates);
+
+  const existingKeys = new Set(
+    (existingPayments ?? []).map((p: Record<string, unknown>) => `${p.tenant_id}|${p.due_date}`)
   );
-  const stmt = db.prepare(
-    "INSERT INTO payments (tenant_id, amount, due_date, status, paid_date) VALUES (?, ?, ?, ?, ?)"
+  const validEntries = candidates.filter((e) => !existingKeys.has(`${e.tenant_id}|${e.due_date}`));
+
+  if (validEntries.length === 0) return;
+
+  // Insert all valid entries as a batch
+  const { error } = await supabaseAdmin.from("payments").insert(
+    validEntries.map((e) => ({
+      tenant_id: e.tenant_id,
+      amount: e.amount,
+      due_date: e.due_date,
+      status: e.status,
+      paid_date: e.paid_date,
+    }))
   );
-  const tx = db.transaction(() => {
-    for (const e of entries) {
-      if (e.amount <= 0) continue;
-      const existing = checkDup.get(e.tenant_id, e.due_date);
-      if (existing) continue;
-      stmt.run(e.tenant_id, e.amount, e.due_date, e.status, e.paid_date);
-    }
-  });
-  tx();
+  if (error) throw error;
   revalidatePath("/admin/payments");
   revalidatePath("/admin");
 }
@@ -649,18 +789,25 @@ export async function createBulkExpenses(
   entries: { property_id: number; category: string; amount: number; month: string; notes: string | null }[]
 ): Promise<void> {
   await requireAuth();
-  const db = getDb();
-  const stmt = db.prepare(
-    "INSERT INTO expenses (property_id, category, amount, month, notes) VALUES (?, ?, ?, ?, ?)"
-  );
-  const tx = db.transaction(() => {
-    for (const e of entries) {
-      if (!VALID_EXPENSE_CATEGORIES.includes(e.category)) continue;
-      if (!/^\d{4}-\d{2}$/.test(e.month)) continue;
-      stmt.run(e.property_id, e.category, e.amount, e.month, e.notes);
-    }
+
+  const validEntries = entries.filter((e) => {
+    if (!VALID_EXPENSE_CATEGORIES.includes(e.category)) return false;
+    if (!/^\d{4}-\d{2}$/.test(e.month)) return false;
+    return true;
   });
-  tx();
+
+  if (validEntries.length === 0) return;
+
+  const { error } = await supabaseAdmin.from("expenses").insert(
+    validEntries.map((e) => ({
+      property_id: e.property_id,
+      category: e.category,
+      amount: e.amount,
+      month: e.month,
+      notes: e.notes,
+    }))
+  );
+  if (error) throw error;
   revalidatePath("/admin/expenses");
   revalidatePath("/admin");
 }
@@ -669,35 +816,42 @@ export async function createBulkExpenses(
 
 export async function getExpenses(propertyId?: number, month?: string, endMonth?: string): Promise<(Expense & { property_name: string })[]> {
   await requireAuth();
-  const db = getDb();
-  let sql = `SELECT e.*, p.name AS property_name FROM expenses e JOIN properties p ON e.property_id = p.id`;
-  const conditions: string[] = [];
-  const params: (string | number)[] = [];
+  let query = supabaseAdmin
+    .from("expenses")
+    .select("*, properties(name)");
 
   if (propertyId) {
-    conditions.push("e.property_id = ?");
-    params.push(propertyId);
+    query = query.eq("property_id", propertyId);
   }
   if (month && endMonth && month !== endMonth) {
-    conditions.push("e.month >= ? AND e.month <= ?");
-    params.push(month, endMonth);
+    query = query.gte("month", month).lte("month", endMonth);
   } else if (month) {
-    conditions.push("e.month = ?");
-    params.push(month);
+    query = query.eq("month", month);
   }
 
-  if (conditions.length > 0) {
-    sql += " WHERE " + conditions.join(" AND ");
-  }
-  sql += " ORDER BY e.month DESC, p.name, e.category LIMIT 500";
+  const { data, error } = await query
+    .order("month", { ascending: false })
+    .limit(500);
+  if (error) throw error;
 
-  return db.query(sql).all(...params) as (Expense & { property_name: string })[];
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const { properties: prop, ...expense } = row;
+    return {
+      ...expense,
+      property_name: (prop as { name: string })?.name ?? "",
+    };
+  }) as (Expense & { property_name: string })[];
 }
 
 export async function getExpense(id: number): Promise<Expense | null> {
   await requireAuth();
-  const db = getDb();
-  return (db.query("SELECT * FROM expenses WHERE id = ?").get(id) as Expense) ?? null;
+  const { data, error } = await supabaseAdmin
+    .from("expenses")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Expense | null;
 }
 
 export async function createExpense(data: {
@@ -708,7 +862,6 @@ export async function createExpense(data: {
   notes?: string;
 }): Promise<Expense> {
   await requireAuth();
-  const db = getDb();
 
   if (!VALID_EXPENSE_CATEGORIES.includes(data.category)) {
     throw new Error("Invalid expense category.");
@@ -717,15 +870,21 @@ export async function createExpense(data: {
     throw new Error("Month must be in YYYY-MM format.");
   }
 
-  const result = db
-    .query(
-      `INSERT INTO expenses (property_id, category, amount, month, notes)
-       VALUES (?, ?, ?, ?, ?) RETURNING *`
-    )
-    .get(data.property_id, data.category, data.amount, data.month, data.notes ?? null) as Expense;
+  const { data: result, error } = await supabaseAdmin
+    .from("expenses")
+    .insert({
+      property_id: data.property_id,
+      category: data.category,
+      amount: data.amount,
+      month: data.month,
+      notes: data.notes ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath("/admin/expenses");
   revalidatePath("/admin");
-  return result;
+  return result as Expense;
 }
 
 export async function updateExpense(
@@ -733,9 +892,8 @@ export async function updateExpense(
   data: { category?: string; amount?: number; month?: string; notes?: string | null }
 ): Promise<Expense | null> {
   await requireAuth();
-  const db = getDb();
-  const existing = (db.query("SELECT * FROM expenses WHERE id = ?").get(id) as Expense) ?? null;
-  if (!existing) return null;
+  const ex = await getExpense(id);
+  if (!ex) return null;
 
   if (data.category && !VALID_EXPENSE_CATEGORIES.includes(data.category)) {
     throw new Error("Invalid expense category.");
@@ -744,27 +902,27 @@ export async function updateExpense(
     throw new Error("Month must be in YYYY-MM format.");
   }
 
-  const result = db
-    .query(
-      `UPDATE expenses SET category = ?, amount = ?, month = ?, notes = ?
-       WHERE id = ? RETURNING *`
-    )
-    .get(
-      data.category ?? existing.category,
-      data.amount ?? existing.amount,
-      data.month ?? existing.month,
-      data.notes !== undefined ? (data.notes ?? null) : existing.notes,
-      id
-    ) as Expense;
+  const { data: result, error } = await supabaseAdmin
+    .from("expenses")
+    .update({
+      category: data.category ?? ex.category,
+      amount: data.amount ?? ex.amount,
+      month: data.month ?? ex.month,
+      notes: data.notes !== undefined ? (data.notes ?? null) : ex.notes,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath("/admin/expenses");
   revalidatePath("/admin");
-  return result;
+  return result as Expense;
 }
 
 export async function deleteExpense(id: number): Promise<void> {
   await requireAuth();
-  const db = getDb();
-  db.query("DELETE FROM expenses WHERE id = ?").run(id);
+  const { error } = await supabaseAdmin.from("expenses").delete().eq("id", id);
+  if (error) throw error;
   revalidatePath("/admin/expenses");
   revalidatePath("/admin");
 }
@@ -773,42 +931,47 @@ export async function deleteExpense(id: number): Promise<void> {
 
 export async function getLockCodes(roomId: number): Promise<(LockCode & { tenant_name: string | null })[]> {
   await requireAuth();
-  const db = getDb();
-  return db
-    .query(
-      `SELECT lc.*, t.name AS tenant_name
-       FROM lock_codes lc
-       LEFT JOIN tenants t ON lc.tenant_id = t.id
-       WHERE lc.room_id = ?
-       ORDER BY lc.created_at`
-    )
-    .all(roomId) as (LockCode & { tenant_name: string | null })[];
+  const { data, error } = await supabaseAdmin
+    .from("lock_codes")
+    .select("*, tenants(name)")
+    .eq("room_id", roomId)
+    .order("created_at");
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const { tenants: tenantData, ...lc } = row;
+    return { ...lc, tenant_name: (tenantData as { name: string } | null)?.name ?? null };
+  }) as (LockCode & { tenant_name: string | null })[];
 }
 
 export async function getAllLockCodesGrouped(propertyId?: number): Promise<
   (LockCode & { tenant_name: string | null; room_number: string; property_name: string; property_id: number })[]
 > {
   await requireAuth();
-  const db = getDb();
-  let sql = `
-    SELECT lc.*, t.name AS tenant_name, r.room_number, p.name AS property_name, r.property_id
-    FROM lock_codes lc
-    JOIN rooms r ON lc.room_id = r.id
-    JOIN properties p ON r.property_id = p.id
-    LEFT JOIN tenants t ON lc.tenant_id = t.id
-  `;
-  const params: number[] = [];
+  let query = supabaseAdmin
+    .from("lock_codes")
+    .select("*, tenants(name), rooms(room_number, property_id, properties(name))");
   if (propertyId) {
-    sql += " WHERE r.property_id = ?";
-    params.push(propertyId);
+    query = query.eq("rooms.property_id", propertyId);
   }
-  sql += " ORDER BY p.name, r.room_number, lc.created_at";
-  return db.query(sql).all(...params) as (LockCode & {
-    tenant_name: string | null;
-    room_number: string;
-    property_name: string;
-    property_id: number;
-  })[];
+  const { data, error } = await query.order("created_at");
+  if (error) throw error;
+  return (data ?? [])
+    .filter((row: Record<string, unknown>) => {
+      if (!propertyId) return true;
+      const r = row.rooms as { property_id: number } | null;
+      return r?.property_id === propertyId;
+    })
+    .map((row: Record<string, unknown>) => {
+      const { tenants: tenantData, rooms: roomData, ...lc } = row;
+      const r = roomData as { room_number: string; property_id: number; properties: { name: string } } | null;
+      return {
+        ...lc,
+        tenant_name: (tenantData as { name: string } | null)?.name ?? null,
+        room_number: r?.room_number ?? "",
+        property_name: r?.properties?.name ?? "",
+        property_id: r?.property_id ?? 0,
+      };
+    }) as (LockCode & { tenant_name: string | null; room_number: string; property_name: string; property_id: number })[];
 }
 
 export async function createLockCode(data: {
@@ -818,15 +981,14 @@ export async function createLockCode(data: {
   tenant_id?: number | null;
 }): Promise<LockCode> {
   await requireAuth();
-  const db = getDb();
-  const result = db
-    .query(
-      `INSERT INTO lock_codes (room_id, code, label, tenant_id)
-       VALUES (?, ?, ?, ?) RETURNING *`
-    )
-    .get(data.room_id, data.code, data.label, data.tenant_id ?? null) as LockCode;
+  const { data: result, error } = await supabaseAdmin
+    .from("lock_codes")
+    .insert({ room_id: data.room_id, code: data.code, label: data.label, tenant_id: data.tenant_id ?? null })
+    .select()
+    .single();
+  if (error) throw error;
   revalidatePath("/admin/lock-codes");
-  return result;
+  return result as LockCode;
 }
 
 export async function updateLockCode(
@@ -834,29 +996,25 @@ export async function updateLockCode(
   data: { code?: string; label?: string; tenant_id?: number | null }
 ): Promise<LockCode | null> {
   await requireAuth();
-  const db = getDb();
-  const existing = (db.query("SELECT * FROM lock_codes WHERE id = ?").get(id) as LockCode) ?? null;
-  if (!existing) return null;
+  const updates: Record<string, unknown> = {};
+  if (data.code !== undefined) updates.code = data.code;
+  if (data.label !== undefined) updates.label = data.label;
+  if (data.tenant_id !== undefined) updates.tenant_id = data.tenant_id;
 
-  const result = db
-    .query(
-      `UPDATE lock_codes SET code = ?, label = ?, tenant_id = ?
-       WHERE id = ? RETURNING *`
-    )
-    .get(
-      data.code ?? existing.code,
-      data.label ?? existing.label,
-      data.tenant_id !== undefined ? data.tenant_id : existing.tenant_id,
-      id
-    ) as LockCode;
+  const { data: result, error } = await supabaseAdmin
+    .from("lock_codes")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
   revalidatePath("/admin/lock-codes");
-  return result;
+  return result as LockCode;
 }
 
 export async function deleteLockCode(id: number): Promise<void> {
   await requireAuth();
-  const db = getDb();
-  db.query("DELETE FROM lock_codes WHERE id = ?").run(id);
+  await supabaseAdmin.from("lock_codes").delete().eq("id", id);
   revalidatePath("/admin/lock-codes");
 }
 
@@ -864,76 +1022,23 @@ export async function deleteLockCode(id: number): Promise<void> {
 
 export async function getDashboardStats(propertyId?: number): Promise<DashboardStats> {
   await requireAuth();
-  const db = getDb();
-
-  const propFilter = propertyId != null;
-
-  const totalProperties = propFilter ? 1 : (
-    db.query("SELECT COUNT(*) as count FROM properties").get() as { count: number }
-  ).count;
-
-  const totalRooms = (
-    db.query(
-      propFilter
-        ? "SELECT COUNT(*) as count FROM rooms WHERE property_id = ?"
-        : "SELECT COUNT(*) as count FROM rooms"
-    ).get(...(propFilter ? [propertyId] : [])) as { count: number }
-  ).count;
-
-  const totalTenants = (
-    db.query(
-      propFilter
-        ? "SELECT COUNT(*) as count FROM tenants t JOIN rooms r ON t.room_id = r.id WHERE t.status = 'active' AND r.property_id = ?"
-        : "SELECT COUNT(*) as count FROM tenants WHERE status = 'active'"
-    ).get(...(propFilter ? [propertyId] : [])) as { count: number }
-  ).count;
-
-  const occupiedRooms = (
-    db.query(
-      propFilter
-        ? "SELECT COUNT(*) as count FROM rooms WHERE status = 'occupied' AND property_id = ?"
-        : "SELECT COUNT(*) as count FROM rooms WHERE status = 'occupied'"
-    ).get(...(propFilter ? [propertyId] : [])) as { count: number }
-  ).count;
-
-  const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
-
   const currentMonth = getCurrentMonth();
 
-  const rentCollected = (
-    db.query(
-      propFilter
-        ? "SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p JOIN tenants t ON p.tenant_id = t.id JOIN rooms r ON t.room_id = r.id WHERE p.status = 'paid' AND strftime('%Y-%m', p.due_date) = ? AND r.property_id = ?"
-        : "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid' AND strftime('%Y-%m', due_date) = ?"
-    ).get(...(propFilter ? [currentMonth, propertyId] : [currentMonth])) as { total: number }
-  ).total;
+  const { data, error } = await supabaseAdmin.rpc("get_dashboard_stats", {
+    p_property_id: propertyId ?? null,
+    p_current_month: currentMonth,
+  });
+  if (error) throw error;
 
-  const rentOutstanding = (
-    db.query(
-      propFilter
-        ? "SELECT COALESCE(SUM(p.amount), 0) as total FROM payments p JOIN tenants t ON p.tenant_id = t.id JOIN rooms r ON t.room_id = r.id WHERE p.status IN ('upcoming', 'overdue') AND strftime('%Y-%m', p.due_date) = ? AND r.property_id = ?"
-        : "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status IN ('upcoming', 'overdue') AND strftime('%Y-%m', due_date) = ?"
-    ).get(...(propFilter ? [currentMonth, propertyId] : [currentMonth])) as { total: number }
-  ).total;
-
-  const totalExpenses = (
-    db.query(
-      propFilter
-        ? "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE month = ? AND property_id = ?"
-        : "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE month = ?"
-    ).get(...(propFilter ? [currentMonth, propertyId] : [currentMonth])) as { total: number }
-  ).total;
-
-  const netIncome = rentCollected - totalExpenses;
-
+  const stats = data as Record<string, number>;
   return {
-    totalProperties,
-    totalRooms,
-    totalTenants,
-    occupancyRate,
-    rentCollected,
-    rentOutstanding,
-    totalExpenses,
-    netIncome,
+    totalProperties: stats.totalProperties ?? 0,
+    totalRooms: stats.totalRooms ?? 0,
+    totalTenants: stats.totalTenants ?? 0,
+    occupancyRate: stats.occupancyRate ?? 0,
+    rentCollected: stats.rentCollected ?? 0,
+    rentOutstanding: stats.rentOutstanding ?? 0,
+    totalExpenses: stats.totalExpenses ?? 0,
+    netIncome: stats.netIncome ?? 0,
   };
 }

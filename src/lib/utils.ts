@@ -1,5 +1,6 @@
-export function parseAmenities(raw: string | null): string[] {
+export function parseAmenities(raw: string | string[] | null): string[] {
   if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
   try { return JSON.parse(raw); } catch { return []; }
 }
 
