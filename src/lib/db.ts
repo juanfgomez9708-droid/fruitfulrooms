@@ -56,6 +56,9 @@ export function getDb(): Database {
   // Migration: Cadillac House photos (2026-03-16)
   migrateCadillacPhotos(db);
 
+  // Migration: Continental House photos (2026-03-24)
+  migrateContinentalPhotos(db);
+
   // Migration: Seed existing tenants (2026-03-18)
   migrateTenants(db);
 
@@ -314,6 +317,68 @@ function migrateCadillacPhotos(db: Database): void {
       "/photos/cadillac-house/14-washer-dryer.jpg",
     ]);
     db.prepare("UPDATE rooms SET photos = ?, photo_url = ? WHERE id = ?").run(photos, "/photos/cadillac-house/01-bedroom.jpg", room6.id);
+  }
+}
+
+function migrateContinentalPhotos(db: Database): void {
+  const continental = db.query("SELECT id FROM properties WHERE name = 'Continental House'").get() as { id: number } | null;
+  if (!continental) return;
+
+  // Set property hero photo (house exterior)
+  const prop = db.query("SELECT photo_url FROM properties WHERE id = ?").get(continental.id) as { photo_url: string | null } | null;
+  if (prop && !prop.photo_url) {
+    db.prepare("UPDATE properties SET photo_url = ? WHERE id = ?").run("/photos/continental-house/01-exterior.png", continental.id);
+  }
+
+  // Shared property photos (exterior, dining, kitchen, mail wall, bathroom)
+  const sharedPhotos = [
+    "/photos/continental-house/01-exterior.png",
+    "/photos/continental-house/02-exterior.png",
+    "/photos/continental-house/03-dining-room.jpeg",
+    "/photos/continental-house/04-dining-room.jpeg",
+    "/photos/continental-house/05-dining-room.jpeg",
+    "/photos/continental-house/06-kitchen.jpeg",
+    "/photos/continental-house/07-mail-wall.jpeg",
+    "/photos/continental-house/13-bathroom.jpeg",
+  ];
+
+  // Room-specific photos
+  const roomPhotos: Record<string, string[]> = {
+    "Room 1": [
+      "/photos/continental-house/08-room1.jpeg",
+      "/photos/continental-house/09-room1.jpeg",
+    ],
+    "Room 5": [
+      "/photos/continental-house/10-room5.jpeg",
+      "/photos/continental-house/11-room5.jpeg",
+    ],
+    "Room 7": [
+      "/photos/continental-house/12-room7.jpeg",
+    ],
+  };
+
+  // Set photos for rooms that have room-specific shots
+  for (const [roomNumber, roomSpecific] of Object.entries(roomPhotos)) {
+    const room = db.query(
+      "SELECT id, photos FROM rooms WHERE property_id = ? AND room_number = ?"
+    ).get(continental.id, roomNumber) as { id: number; photos: string | null } | null;
+
+    if (room && !room.photos) {
+      const allPhotos = JSON.stringify([...roomSpecific, ...sharedPhotos]);
+      db.prepare("UPDATE rooms SET photos = ?, photo_url = ? WHERE id = ?").run(allPhotos, roomSpecific[0], room.id);
+    }
+  }
+
+  // Set shared photos for rooms without room-specific shots
+  const allRooms = db.query(
+    "SELECT id, room_number, photos FROM rooms WHERE property_id = ?"
+  ).all(continental.id) as { id: number; room_number: string; photos: string | null }[];
+
+  for (const room of allRooms) {
+    if (room.photos) continue; // Already has photos (set above or previously)
+    if (roomPhotos[room.room_number]) continue; // Handled above
+    const photos = JSON.stringify(sharedPhotos);
+    db.prepare("UPDATE rooms SET photos = ?, photo_url = ? WHERE id = ?").run(photos, sharedPhotos[0], room.id);
   }
 }
 
