@@ -28,4 +28,4 @@ ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "bun next start -H 0.0.0.0 -p ${PORT:-3000}"]
+CMD ["sh", "-c", "echo '=== Container starting ===' && echo \"PORT=$PORT\" && echo \"SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL\" && ls .next/standalone/ 2>/dev/null || echo 'No standalone dir' && bun next start -H 0.0.0.0 -p ${PORT:-3000} 2>&1"]
