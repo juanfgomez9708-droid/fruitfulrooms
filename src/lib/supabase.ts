@@ -1,15 +1,43 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let _supabase: SupabaseClient | null = null;
+let _supabaseAdmin: SupabaseClient | null = null;
 
-if (!supabaseUrl) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable");
-if (!supabaseAnonKey) throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable");
-if (!supabaseServiceRoleKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY environment variable");
+function getEnv(name: string): string {
+  const val = process.env[name];
+  if (!val) throw new Error(`Missing ${name} environment variable`);
+  return val;
+}
 
 /** Public client — respects RLS. Use for public listings and inquiry submission. */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(getEnv("NEXT_PUBLIC_SUPABASE_URL"), getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"));
+  }
+  return _supabase;
+}
 
 /** Admin client — bypasses RLS. Use for all admin CRUD operations. */
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+export function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabaseAdmin) {
+    _supabaseAdmin = createClient(getEnv("NEXT_PUBLIC_SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"));
+  }
+  return _supabaseAdmin;
+}
+
+// Re-export as constants via getters for backward compatibility
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop: string) {
+    const client = getSupabase();
+    const value = (client as unknown as Record<string, unknown>)[prop];
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
+
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
+  get(_, prop: string) {
+    const client = getSupabaseAdmin();
+    const value = (client as unknown as Record<string, unknown>)[prop];
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
