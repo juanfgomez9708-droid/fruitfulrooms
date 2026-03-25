@@ -19,13 +19,10 @@ ARG AUTH_SECRET
 # Build the app
 RUN bun run build
 
-# Create data directory (legacy — can be removed after SQLite is fully retired)
-RUN mkdir -p data
-
 # Railway injects PORT env var
 ENV HOSTNAME="0.0.0.0"
 ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "echo '=== Container starting ===' && echo \"PORT=$PORT\" && echo \"SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL\" && ls .next/standalone/ 2>/dev/null || echo 'No standalone dir' && bun next start -H 0.0.0.0 -p ${PORT:-3000} 2>&1"]
+CMD ["sh", "-c", "bun next start -H 0.0.0.0 -p ${PORT:-3000}"]
