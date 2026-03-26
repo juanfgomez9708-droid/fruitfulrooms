@@ -325,21 +325,30 @@ function migrateContinentalPhotos(db: Database): void {
   if (!continental) return;
 
   // Set property hero photo (house exterior)
-  const prop = db.query("SELECT photo_url FROM properties WHERE id = ?").get(continental.id) as { photo_url: string | null } | null;
-  if (prop && !prop.photo_url) {
-    db.prepare("UPDATE properties SET photo_url = ? WHERE id = ?").run("/photos/continental-house/01-exterior.png", continental.id);
-  }
+  db.prepare("UPDATE properties SET photo_url = ? WHERE id = ?").run("/photos/continental-house/01-exterior.png", continental.id);
 
-  // Shared property photos (exterior, dining, kitchen, mail wall, bathroom)
+  // Shared property photos (exterior, dining, kitchen, bathrooms, laundry)
   const sharedPhotos = [
     "/photos/continental-house/01-exterior.png",
     "/photos/continental-house/02-exterior.png",
     "/photos/continental-house/03-dining-room.jpeg",
     "/photos/continental-house/04-dining-room.jpeg",
     "/photos/continental-house/05-dining-room.jpeg",
+    "/photos/continental-house/17-dining-room.jpeg",
     "/photos/continental-house/06-kitchen.jpeg",
+    "/photos/continental-house/14-kitchen-full.png",
+    "/photos/continental-house/15-kitchen-counter.png",
+    "/photos/continental-house/16-kitchen-fridge.jpeg",
     "/photos/continental-house/07-mail-wall.jpeg",
     "/photos/continental-house/13-bathroom.jpeg",
+    "/photos/continental-house/18-bathroom.jpeg",
+    "/photos/continental-house/19-bathroom.jpeg",
+    "/photos/continental-house/20-bathroom-sink.jpeg",
+    "/photos/continental-house/21-shower.jpeg",
+    "/photos/continental-house/22-shower.jpeg",
+    "/photos/continental-house/23-shower.jpeg",
+    "/photos/continental-house/24-small-bathroom.jpeg",
+    "/photos/continental-house/25-washer-dryer.jpeg",
   ];
 
   // Room-specific photos
@@ -347,23 +356,35 @@ function migrateContinentalPhotos(db: Database): void {
     "Room 1": [
       "/photos/continental-house/08-room1.jpeg",
       "/photos/continental-house/09-room1.jpeg",
+      "/photos/continental-house/26-room1.jpeg",
+      "/photos/continental-house/27-room1.jpeg",
+    ],
+    "Room 3": [
+      "/photos/continental-house/28-room3.jpeg",
+      "/photos/continental-house/29-room3.jpeg",
+      "/photos/continental-house/30-room3-closet.jpeg",
+      "/photos/continental-house/31-room3.jpeg",
     ],
     "Room 5": [
       "/photos/continental-house/10-room5.jpeg",
       "/photos/continental-house/11-room5.jpeg",
+      "/photos/continental-house/32-room5.jpeg",
     ],
     "Room 7": [
       "/photos/continental-house/12-room7.jpeg",
+      "/photos/continental-house/33-room7.jpeg",
+      "/photos/continental-house/34-room7.jpeg",
+      "/photos/continental-house/35-room7.jpeg",
     ],
   };
 
-  // Set photos for rooms that have room-specific shots
+  // Update all rooms — always overwrite with latest photo set
   for (const [roomNumber, roomSpecific] of Object.entries(roomPhotos)) {
     const room = db.query(
-      "SELECT id, photos FROM rooms WHERE property_id = ? AND room_number = ?"
-    ).get(continental.id, roomNumber) as { id: number; photos: string | null } | null;
+      "SELECT id FROM rooms WHERE property_id = ? AND room_number = ?"
+    ).get(continental.id, roomNumber) as { id: number } | null;
 
-    if (room && !room.photos) {
+    if (room) {
       const allPhotos = JSON.stringify([...roomSpecific, ...sharedPhotos]);
       db.prepare("UPDATE rooms SET photos = ?, photo_url = ? WHERE id = ?").run(allPhotos, roomSpecific[0], room.id);
     }
@@ -375,7 +396,6 @@ function migrateContinentalPhotos(db: Database): void {
   ).all(continental.id) as { id: number; room_number: string; photos: string | null }[];
 
   for (const room of allRooms) {
-    if (room.photos) continue; // Already has photos (set above or previously)
     if (roomPhotos[room.room_number]) continue; // Handled above
     const photos = JSON.stringify(sharedPhotos);
     db.prepare("UPDATE rooms SET photos = ?, photo_url = ? WHERE id = ?").run(photos, sharedPhotos[0], room.id);
