@@ -16,7 +16,7 @@ export interface Room {
   status: "vacant" | "occupied" | "maintenance";
   amenities: string[] | null; // JSONB array from Supabase
   photo_url: string | null;
-  photos: string[] | null; // JSONB array of photo paths from Supabase
+  photos: string | null; // JSON string of photo paths array from Supabase (text column, not JSONB)
   description: string | null;
   created_at: string;
 }

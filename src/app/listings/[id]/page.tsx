@@ -76,7 +76,7 @@ export default async function ListingDetailPage({
         {/* Photos */}
         {room.photos ? (
           <PhotoGallery
-            photos={room.photos}
+            photos={JSON.parse(room.photos)}
             alt={`${room.room_number} at ${property?.name}`}
           />
         ) : room.photo_url ? (
