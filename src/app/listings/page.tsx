@@ -3,6 +3,8 @@ import { getPublicProperties } from "@/lib/actions";
 import { PublicHeader } from "@/app/components/PublicHeader";
 import { PublicFooter } from "@/app/components/PublicFooter";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Available Rooms for Rent in Florida",
   description: "Browse furnished rooms for rent in Orlando, Daytona Beach, Ormond Beach, and Mulberry FL. Utilities included, no deposit. Starting at $650/month. Apply online.",

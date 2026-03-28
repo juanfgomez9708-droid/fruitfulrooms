@@ -6,6 +6,8 @@ import { parseAmenities } from "@/lib/utils";
 import { PublicHeader } from "@/app/components/PublicHeader";
 import { PublicFooter } from "@/app/components/PublicFooter";
 
+export const dynamic = "force-dynamic";
+
 const getCachedProperty = cache((id: number) => getPublicProperty(id));
 const getCachedRooms = cache((id: number) => getPropertyVacantRooms(id));
 

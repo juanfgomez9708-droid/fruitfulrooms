@@ -8,6 +8,8 @@ import { PublicFooter } from "@/app/components/PublicFooter";
 import { InquiryForm } from "./InquiryForm";
 import { PhotoGallery } from "./PhotoGallery";
 
+export const dynamic = "force-dynamic";
+
 const getCachedRoom = cache((id: number) => getPublicRoom(id));
 const getCachedProperty = cache((id: number) => getPublicProperty(id));
 
