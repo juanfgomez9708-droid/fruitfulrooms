@@ -22,7 +22,7 @@ export function parseCsv(text: string): { transactions: CsvTransaction[]; errors
   const headers = parseCsvRow(lines[0]).map((h) => h.trim());
   const colMap = mapColumns(headers);
 
-  if (!colMap.date || !colMap.amount) {
+  if (colMap.date === undefined || colMap.amount === undefined) {
     errors.push(`Could not find required columns (Date, Amount). Found headers: ${headers.join(", ")}`);
     return { transactions: [], errors };
   }
