@@ -14,6 +14,7 @@ const navItems = [
   { href: "/admin/expenses", label: "Expenses", icon: "📉" },
   { href: "/admin/lock-codes", label: "Lock Codes", icon: "🔑" },
   { href: "/admin/inquiries", label: "Inquiries", icon: "📋" },
+  { href: "/admin/import", label: "Import", icon: "📥" },
 ];
 
 export function AdminSidebar() {

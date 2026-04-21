@@ -89,3 +89,54 @@ export interface DashboardStats {
   totalExpenses: number;
   netIncome: number;
 }
+
+// ─── CSV Import Types ─────────────────────────────────────────────────────────
+
+export interface CsvTransaction {
+  date: string;
+  payee: string;
+  accountNum: string;
+  transactionType: string;
+  description: string;
+  status: string;
+  amount: number;
+  balance: number;
+  rawRow: Record<string, string>;
+}
+
+export interface CategorizedTransaction {
+  original: CsvTransaction;
+  type: "expense" | "payment" | "skip";
+  confidence: "high" | "medium" | "low";
+  skipReason?: string;
+  property_id?: number;
+  category?: string;
+  month?: string;
+  tenant_id?: number;
+  tenant_name?: string;
+  due_date?: string;
+  paid_date?: string;
+  amount: number;
+  notes?: string;
+  isDuplicate?: boolean;
+  included: boolean;
+}
+
+export interface ConfirmedTransaction {
+  type: "expense" | "payment";
+  property_id?: number;
+  category?: string;
+  amount: number;
+  month?: string;
+  notes?: string;
+  tenant_id?: number;
+  due_date?: string;
+  paid_date?: string;
+}
+
+export interface ImportResult {
+  expensesCreated: number;
+  paymentsCreated: number;
+  duplicatesSkipped: number;
+  errors: string[];
+}
