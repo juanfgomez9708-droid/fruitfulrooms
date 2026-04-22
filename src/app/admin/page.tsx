@@ -1,9 +1,11 @@
-import { getDashboardStats, getPayments, getTenants, getProperties } from "@/lib/actions";
+import { getDashboardStats, getPayments, getExpenses, getTenants, getProperties } from "@/lib/actions";
+import { getCurrentMonth, TIME_PERIODS, getDateRange, type TimePeriod } from "@/lib/utils";
+import { DashboardFilters } from "./DashboardFilters";
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ property?: string }>;
+  searchParams: Promise<{ property?: string; period?: string; month?: string }>;
 }) {
   const params = await searchParams;
   const properties = await getProperties();
@@ -11,14 +13,38 @@ export default async function DashboardPage({
   const selectedPropertyName = selectedProperty
     ? properties.find((p) => p.id === selectedProperty)?.name
     : undefined;
+  const selectedPeriod = (params.period || "monthly") as TimePeriod;
+  const selectedMonth = params.month || getCurrentMonth();
 
+  // Static stats from RPC (properties, rooms, tenants, occupancy — don't change with time)
   const stats = await getDashboardStats(selectedProperty);
-  const payments = await getPayments(undefined, selectedProperty);
-  const tenants = await getTenants();
 
+  // Financial stats from date-range queries
+  const range = getDateRange(selectedPeriod, selectedMonth);
+  const [payments, expenses] = await Promise.all([
+    range
+      ? getPayments(undefined, selectedProperty, range.startMonth, range.endMonth)
+      : getPayments(undefined, selectedProperty),
+    range
+      ? getExpenses(selectedProperty, range.startMonth, range.endMonth)
+      : getExpenses(selectedProperty),
+  ]);
+
+  const tenants = await getTenants();
   const tenantMap = new Map(tenants.map((t) => [t.id, t]));
 
+  // Compute financial KPIs from queried data
+  const rentCollected = payments
+    .filter((p) => p.status === "paid")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const rentOutstanding = payments
+    .filter((p) => p.status === "upcoming" || p.status === "overdue")
+    .reduce((sum, p) => sum + p.amount, 0);
   const overdueCount = payments.filter((p) => p.status === "overdue").length;
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const netIncome = rentCollected - totalExpenses;
+
+  const periodLabel = range?.label || "All Time";
   const recentPayments = payments.slice(0, 5);
 
   return (
@@ -27,27 +53,15 @@ export default async function DashboardPage({
         <h1 className="text-2xl font-bold text-gray-900">
           Dashboard{selectedPropertyName ? ` — ${selectedPropertyName}` : ""}
         </h1>
-
-        {/* Property Filter */}
-        <form className="flex items-center gap-2">
-          <select
-            name="property"
-            defaultValue={selectedProperty ?? ""}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Properties</option>
-            {properties.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
-          >
-            Filter
-          </button>
-        </form>
       </div>
+
+      {/* Filters */}
+      <DashboardFilters
+        properties={properties}
+        selectedProperty={selectedProperty}
+        selectedPeriod={selectedPeriod}
+        selectedMonth={selectedMonth}
+      />
 
       {/* Stats cards */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -62,17 +76,18 @@ export default async function DashboardPage({
       </div>
 
       {/* Rent collection */}
+      <div className="mb-2 text-sm font-medium text-gray-500">{periodLabel}</div>
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card">
-          <p className="text-sm text-gray-500">Collected This Month</p>
+          <p className="text-sm text-gray-500">Collected</p>
           <p className="mt-1 text-2xl font-bold text-green-600">
-            ${stats.rentCollected.toLocaleString()}
+            ${rentCollected.toLocaleString()}
           </p>
         </div>
         <div className="card">
           <p className="text-sm text-gray-500">Outstanding</p>
           <p className="mt-1 text-2xl font-bold text-yellow-600">
-            ${stats.rentOutstanding.toLocaleString()}
+            ${rentOutstanding.toLocaleString()}
           </p>
         </div>
         <div className="card">
@@ -86,22 +101,22 @@ export default async function DashboardPage({
       {/* P&L Summary */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card">
-          <p className="text-sm text-gray-500">Monthly Expenses</p>
+          <p className="text-sm text-gray-500">Total Expenses</p>
           <p className="mt-1 text-2xl font-bold text-red-600">
-            ${stats.totalExpenses.toLocaleString()}
+            ${totalExpenses.toLocaleString()}
           </p>
         </div>
         <div className="card">
           <p className="text-sm text-gray-500">Net Income</p>
-          <p className={`mt-1 text-2xl font-bold ${stats.netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
-            ${stats.netIncome.toLocaleString()}
+          <p className={`mt-1 text-2xl font-bold ${netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+            ${netIncome.toLocaleString()}
           </p>
         </div>
         <div className="card">
           <p className="text-sm text-gray-500">Margin</p>
-          <p className={`mt-1 text-2xl font-bold ${stats.netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {stats.rentCollected > 0
-              ? `${Math.round((stats.netIncome / stats.rentCollected) * 100)}%`
+          <p className={`mt-1 text-2xl font-bold ${netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+            {rentCollected > 0
+              ? `${Math.round((netIncome / rentCollected) * 100)}%`
               : "—"}
           </p>
         </div>
@@ -111,7 +126,7 @@ export default async function DashboardPage({
       <div className="card">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Recent Payments</h2>
         {recentPayments.length === 0 ? (
-          <p className="text-sm text-gray-500">No payments recorded yet.</p>
+          <p className="text-sm text-gray-500">No payments recorded for this period.</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
