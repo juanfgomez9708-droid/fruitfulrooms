@@ -41,6 +41,7 @@ export const EXPENSE_CATEGORIES = [
   { value: "repairs", label: "Monthly Repairs" },
   { value: "cleaning", label: "Cleaning" },
   { value: "lender_payment", label: "Private Money Lender Payment" },
+  { value: "landscaping", label: "Landscaping" },
   { value: "other", label: "Other" },
 ] as const;
 

@@ -34,7 +34,7 @@ export const CATEGORY_RULES: CategoryRule[] = [
   { keywords: ["home depot", "lowe's", "lowes", "repair", "maintenance", "plumb", "hvac", "handyman"], category: "repairs" },
   { keywords: ["clean", "maid", "janitorial"], category: "cleaning" },
   { keywords: ["rosa rucker", "interest only loan", "lender", "private money", "hard money"], category: "lender_payment" },
-  { keywords: ["landscap", "lawn", "mowing"], category: "other" },
+  { keywords: ["landscap", "lawn", "mowing"], category: "landscaping" },
 ];
 
 // ─── Skip Rules ───────────────────────────────────────────────────────────────
