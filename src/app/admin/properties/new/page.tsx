@@ -63,7 +63,7 @@ export default function NewPropertyPage() {
           <label className="mb-1 block text-sm font-medium text-gray-700">Photo URL</label>
           <input
             name="photo_url"
-            type="url"
+            type="text"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
