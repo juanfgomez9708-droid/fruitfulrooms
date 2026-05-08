@@ -1,6 +1,7 @@
-import { getDashboardStats, getPayments, getExpenses, getTenants, getProperties } from "@/lib/actions";
+import { getDashboardStats, getPayments, getExpenses, getTenants, getTenantsWithRooms, getProperties } from "@/lib/actions";
 import { getCurrentMonth, TIME_PERIODS, getDateRange, type TimePeriod } from "@/lib/utils";
 import { DashboardFilters } from "./DashboardFilters";
+import Link from "next/link";
 
 export default async function DashboardPage({
   searchParams,
@@ -32,6 +33,28 @@ export default async function DashboardPage({
 
   const tenants = await getTenants();
   const tenantMap = new Map(tenants.map((t) => [t.id, t]));
+
+  // ─── Overdue Rent Detection ──────────────────────────────────────────────
+  // After the 5th of each month, show active tenants with no "paid" payment for the current month
+  const now = new Date();
+  const dayOfMonth = now.getUTCDate();
+  const currentMonth = getCurrentMonth();
+  const isAfterGracePeriod = dayOfMonth > 5;
+
+  const tenantsWithRooms = await getTenantsWithRooms(selectedProperty);
+  const currentMonthPayments = await getPayments(undefined, undefined, currentMonth, currentMonth);
+
+  // Build set of tenant IDs who have paid this month
+  const paidTenantIds = new Set(
+    currentMonthPayments
+      .filter((p) => p.status === "paid")
+      .map((p) => p.tenant_id)
+  );
+
+  // Find active tenants who haven't paid
+  const overdueTenantsData = isAfterGracePeriod
+    ? tenantsWithRooms.filter((t) => !paidTenantIds.has(t.id))
+    : [];
 
   // Compute financial KPIs from queried data
   const rentCollected = payments
@@ -74,6 +97,52 @@ export default async function DashboardPage({
           icon="📈"
         />
       </div>
+
+      {/* Overdue Rent Alert */}
+      {isAfterGracePeriod && overdueTenantsData.length > 0 && (
+        <div className="mb-8 rounded-lg border border-red-200 bg-red-50 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-red-800">
+              <span className="text-xl">⚠️</span>
+              Overdue Rent — {currentMonth}
+            </h2>
+            <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
+              {overdueTenantsData.length} unpaid
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-red-200 text-left text-red-700">
+                <th className="pb-2 font-medium">Tenant</th>
+                <th className="pb-2 font-medium">Property</th>
+                <th className="pb-2 font-medium">Room</th>
+                <th className="pb-2 font-medium">Rent</th>
+                <th className="pb-2 font-medium">Phone</th>
+              </tr>
+            </thead>
+            <tbody>
+              {overdueTenantsData.map((t, i) => (
+                <tr key={t.id} className={i % 2 === 0 ? "bg-red-50" : "bg-red-100/50"}>
+                  <td className="py-2 font-medium text-red-900">{t.name}</td>
+                  <td className="py-2 text-red-800">{t.property_name}</td>
+                  <td className="py-2 text-red-800">{t.room_number}</td>
+                  <td className="py-2 font-medium text-red-900">${t.room_price.toLocaleString()}</td>
+                  <td className="py-2 text-red-800">
+                    {t.phone ? (
+                      <a href={`tel:${t.phone}`} className="underline hover:text-red-600">{t.phone}</a>
+                    ) : (
+                      <span className="text-red-400">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-3 text-xs text-red-600">
+            Showing active tenants with no paid payment recorded for {currentMonth}. Grace period: 5th of the month.
+          </p>
+        </div>
+      )}
 
       {/* Rent collection */}
       <div className="mb-2 text-sm font-medium text-gray-500">{periodLabel}</div>
