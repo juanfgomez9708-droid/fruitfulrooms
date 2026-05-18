@@ -1,7 +1,8 @@
 import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS } from "./constants";
 
-const GHL_API_KEY = process.env.GHL_API_KEY;
-const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID;
+// Read env vars lazily at call time (not import time) to avoid Docker build issues
+function getApiKey(): string | undefined { return process.env.GHL_API_KEY; }
+function getLocationId(): string | undefined { return process.env.GHL_LOCATION_ID; }
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 const GHL_API_VERSION = "2021-07-28";
 
@@ -54,7 +55,7 @@ async function ghlRequest(endpoint: string, options: { method?: string; body?: u
   return fetch(`${GHL_API_BASE}${endpoint}`, {
     method,
     headers: {
-      Authorization: `Bearer ${GHL_API_KEY}`,
+      Authorization: `Bearer ${getApiKey()}`,
       Version: GHL_API_VERSION,
       "Content-Type": "application/json",
     },
@@ -63,7 +64,7 @@ async function ghlRequest(endpoint: string, options: { method?: string; body?: u
 }
 
 async function searchContactByEmail(email: string): Promise<{ id: string } | null> {
-  const res = await ghlRequest(`/contacts/?locationId=${GHL_LOCATION_ID}&query=${encodeURIComponent(email)}`);
+  const res = await ghlRequest(`/contacts/?locationId=${getLocationId()}&query=${encodeURIComponent(email)}`);
   if (!res.ok) return null;
   const data = await res.json();
   const contacts = data.contacts ?? [];
@@ -92,7 +93,7 @@ export async function createOrUpdateGHLContact(inquiry: {
   property_name: string;
   property_city: string;
 }): Promise<{ contactId: string } | null> {
-  if (!GHL_API_KEY || !GHL_LOCATION_ID) {
+  if (!getApiKey() || !getLocationId()) {
     console.log("[ghl] GHL_API_KEY or GHL_LOCATION_ID not set — skipping GHL contact creation");
     return null;
   }
@@ -136,7 +137,7 @@ export async function createOrUpdateGHLContact(inquiry: {
     phone: inquiry.phone,
     city: inquiry.current_city || undefined,
     source: inquiry.referral_source || "Website",
-    locationId: GHL_LOCATION_ID,
+    locationId: getLocationId(),
     tags,
     customFields,
   };
