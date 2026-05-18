@@ -712,52 +712,54 @@ export async function submitInquiry(data: {
     const propName = prop?.name ?? "Unknown";
     const propCity = prop?.city ?? "";
 
-    // Send email notification (fire-and-forget)
-    sendInquiryEmail({
-      name,
-      email,
-      phone,
-      employment_status: data.employment_status,
-      income_range: data.income_range,
-      desired_move_in: data.desired_move_in,
-      occupants: data.occupants,
-      has_pets: data.has_pets,
-      background_check_consent: data.background_check_consent,
-      about,
-      current_city: currentCity,
-      referral_source: referralSource,
-      preferred_contact: preferredContact,
-      job_title: jobTitle,
-      job_length: jobLength,
-      has_vehicle: hasVehicle,
-      preferred_tour_date: preferredTourDate,
-      room_number: roomInfo?.room_number ?? "Unknown",
-      property_name: propName,
-    }).catch(() => {});
+    // Send email + push to GHL in parallel (awaited so Next.js doesn't kill them)
+    const roomNumber = roomInfo?.room_number ?? "Unknown";
 
-    // Push to GHL CRM (fire-and-forget)
-    createOrUpdateGHLContact({
-      name,
-      email,
-      phone,
-      current_city: currentCity,
-      referral_source: referralSource,
-      preferred_contact: preferredContact,
-      employment_status: data.employment_status,
-      job_title: jobTitle,
-      job_length: jobLength,
-      income_range: data.income_range,
-      desired_move_in: data.desired_move_in,
-      occupants: data.occupants,
-      has_pets: data.has_pets,
-      has_vehicle: hasVehicle,
-      background_check_consent: data.background_check_consent,
-      preferred_tour_date: preferredTourDate,
-      about,
-      room_number: roomInfo?.room_number ?? "Unknown",
-      property_name: propName,
-      property_city: propCity,
-    }).catch(() => {});
+    await Promise.allSettled([
+      sendInquiryEmail({
+        name,
+        email,
+        phone,
+        employment_status: data.employment_status,
+        income_range: data.income_range,
+        desired_move_in: data.desired_move_in,
+        occupants: data.occupants,
+        has_pets: data.has_pets,
+        background_check_consent: data.background_check_consent,
+        about,
+        current_city: currentCity,
+        referral_source: referralSource,
+        preferred_contact: preferredContact,
+        job_title: jobTitle,
+        job_length: jobLength,
+        has_vehicle: hasVehicle,
+        preferred_tour_date: preferredTourDate,
+        room_number: roomNumber,
+        property_name: propName,
+      }),
+      createOrUpdateGHLContact({
+        name,
+        email,
+        phone,
+        current_city: currentCity,
+        referral_source: referralSource,
+        preferred_contact: preferredContact,
+        employment_status: data.employment_status,
+        job_title: jobTitle,
+        job_length: jobLength,
+        income_range: data.income_range,
+        desired_move_in: data.desired_move_in,
+        occupants: data.occupants,
+        has_pets: data.has_pets,
+        has_vehicle: hasVehicle,
+        background_check_consent: data.background_check_consent,
+        preferred_tour_date: preferredTourDate,
+        about,
+        room_number: roomNumber,
+        property_name: propName,
+        property_city: propCity,
+      }),
+    ]);
 
     return { success: true };
   } catch {
