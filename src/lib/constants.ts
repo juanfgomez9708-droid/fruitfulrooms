@@ -30,6 +30,23 @@ export const INQUIRY_STATUS_COLORS: Record<string, string> = {
 export const VALID_EMPLOYMENT = EMPLOYMENT_OPTIONS.map((o) => o.value) as unknown as string[];
 export const VALID_INCOME = INCOME_OPTIONS.map((o) => o.value) as unknown as string[];
 
+export const REFERRAL_SOURCE_OPTIONS = [
+  { value: "facebook", label: "Facebook" },
+  { value: "craigslist", label: "Craigslist" },
+  { value: "google", label: "Google Search" },
+  { value: "friend", label: "Friend / Referral" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const CONTACT_METHOD_OPTIONS = [
+  { value: "call", label: "Phone Call" },
+  { value: "text", label: "Text Message" },
+  { value: "email", label: "Email" },
+] as const;
+
+export const VALID_REFERRAL_SOURCES = REFERRAL_SOURCE_OPTIONS.map((o) => o.value) as unknown as string[];
+export const VALID_CONTACT_METHODS = CONTACT_METHOD_OPTIONS.map((o) => o.value) as unknown as string[];
+
 // ─── Expense Constants ──────────────────────────────────────────────────────
 
 export const EXPENSE_CATEGORIES = [

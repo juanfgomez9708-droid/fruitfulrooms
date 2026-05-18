@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getInquiry, updateInquiryStatus } from "@/lib/actions";
-import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS, INQUIRY_STATUS_COLORS, INQUIRY_STATUSES } from "@/lib/constants";
+import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS, INQUIRY_STATUS_COLORS, INQUIRY_STATUSES, REFERRAL_SOURCE_OPTIONS, CONTACT_METHOD_OPTIONS } from "@/lib/constants";
 
 const employmentLabels = Object.fromEntries(EMPLOYMENT_OPTIONS.map((o) => [o.value, o.label]));
 const incomeLabels = Object.fromEntries(INCOME_OPTIONS.map((o) => [o.value, o.label]));
+const referralLabels = Object.fromEntries(REFERRAL_SOURCE_OPTIONS.map((o) => [o.value, o.label]));
+const contactMethodLabels = Object.fromEntries(CONTACT_METHOD_OPTIONS.map((o) => [o.value, o.label]));
 
 export default async function InquiryDetailPage({
   params,
@@ -64,6 +66,51 @@ export default async function InquiryDetailPage({
                 <span className="text-gray-500 block">Room Price</span>
                 <span className="font-medium">${inquiry.room_price}/mo</span>
               </div>
+              {inquiry.current_city && (
+                <div>
+                  <span className="text-gray-500 block">Current City</span>
+                  <span className="font-medium">{inquiry.current_city}</span>
+                </div>
+              )}
+              {inquiry.preferred_contact && (
+                <div>
+                  <span className="text-gray-500 block">Preferred Contact</span>
+                  <span className="font-medium">{contactMethodLabels[inquiry.preferred_contact] ?? inquiry.preferred_contact}</span>
+                </div>
+              )}
+              {inquiry.referral_source && (
+                <div>
+                  <span className="text-gray-500 block">How They Found Us</span>
+                  <span className="font-medium">{referralLabels[inquiry.referral_source] ?? inquiry.referral_source}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Employment & Income */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <h2 className="text-lg font-semibold mb-4">Employment & Income</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div className="rounded-lg bg-gray-50 p-4">
+                <span className="text-gray-500 block mb-1">Employment Status</span>
+                <span className="font-medium">{employmentLabels[inquiry.employment_status] ?? inquiry.employment_status}</span>
+              </div>
+              {inquiry.job_title && (
+                <div className="rounded-lg bg-gray-50 p-4">
+                  <span className="text-gray-500 block mb-1">Job Title</span>
+                  <span className="font-medium">{inquiry.job_title}</span>
+                </div>
+              )}
+              {inquiry.job_length && (
+                <div className="rounded-lg bg-gray-50 p-4">
+                  <span className="text-gray-500 block mb-1">Job Length</span>
+                  <span className="font-medium">{inquiry.job_length}</span>
+                </div>
+              )}
+              <div className="rounded-lg bg-gray-50 p-4">
+                <span className="text-gray-500 block mb-1">Monthly Income</span>
+                <span className="font-medium">{incomeLabels[inquiry.income_range] ?? inquiry.income_range}</span>
+              </div>
             </div>
           </div>
 
@@ -72,17 +119,15 @@ export default async function InquiryDetailPage({
             <h2 className="text-lg font-semibold mb-4">Screening Answers</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div className="rounded-lg bg-gray-50 p-4">
-                <span className="text-gray-500 block mb-1">Employment Status</span>
-                <span className="font-medium">{employmentLabels[inquiry.employment_status] ?? inquiry.employment_status}</span>
-              </div>
-              <div className="rounded-lg bg-gray-50 p-4">
-                <span className="text-gray-500 block mb-1">Monthly Income</span>
-                <span className="font-medium">{incomeLabels[inquiry.income_range] ?? inquiry.income_range}</span>
-              </div>
-              <div className="rounded-lg bg-gray-50 p-4">
                 <span className="text-gray-500 block mb-1">Desired Move-in</span>
                 <span className="font-medium">{inquiry.desired_move_in}</span>
               </div>
+              {inquiry.preferred_tour_date && (
+                <div className="rounded-lg bg-gray-50 p-4">
+                  <span className="text-gray-500 block mb-1">Preferred Tour Date</span>
+                  <span className="font-medium">{inquiry.preferred_tour_date}</span>
+                </div>
+              )}
               <div className="rounded-lg bg-gray-50 p-4">
                 <span className="text-gray-500 block mb-1">Occupants</span>
                 <span className="font-medium">{inquiry.occupants === "1" ? "Just them" : "2 people"}</span>
@@ -93,6 +138,12 @@ export default async function InquiryDetailPage({
                   {inquiry.has_pets === "yes" ? "Yes" : "No"}
                 </span>
               </div>
+              {inquiry.has_vehicle && (
+                <div className="rounded-lg bg-gray-50 p-4">
+                  <span className="text-gray-500 block mb-1">Vehicle</span>
+                  <span className="font-medium">{inquiry.has_vehicle === "yes" ? "Yes" : "No"}</span>
+                </div>
+              )}
               <div className="rounded-lg bg-gray-50 p-4">
                 <span className="text-gray-500 block mb-1">Background Check Consent</span>
                 <span className={`font-medium ${inquiry.background_check_consent === "no" ? "text-red-600" : "text-green-600"}`}>

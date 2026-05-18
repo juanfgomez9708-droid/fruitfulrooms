@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { supabase, supabaseAdmin } from "./supabase";
 import { requireAuth } from "./auth";
-import { VALID_EMPLOYMENT, VALID_INCOME, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
+import { VALID_EMPLOYMENT, VALID_INCOME, VALID_REFERRAL_SOURCES, VALID_CONTACT_METHODS, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
 import { getCurrentMonth } from "./utils";
 import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats } from "./types";
 import { sendInquiryEmail } from "./email";
+import { createOrUpdateGHLContact } from "./ghl";
 
 /** Returns the first day of the month after the given YYYY-MM string. */
 function nextMonthStart(yyyyMm: string): string {
@@ -612,12 +613,26 @@ export async function submitInquiry(data: {
   has_pets: string;
   background_check_consent: string;
   about?: string;
+  current_city?: string;
+  referral_source?: string;
+  preferred_contact?: string;
+  job_title?: string;
+  job_length?: string;
+  has_vehicle?: string;
+  preferred_tour_date?: string;
 }): Promise<{ success: boolean; error?: string }> {
   // Public action — no auth required, uses anon client
   const name = data.name?.trim();
   const email = data.email?.trim().toLowerCase();
   const phone = data.phone?.trim();
   const about = data.about?.trim() || null;
+  const currentCity = data.current_city?.trim() || null;
+  const jobTitle = data.job_title?.trim() || null;
+  const jobLength = data.job_length?.trim() || null;
+  const referralSource = data.referral_source || null;
+  const preferredContact = data.preferred_contact || null;
+  const hasVehicle = data.has_vehicle || null;
+  const preferredTourDate = data.preferred_tour_date || null;
 
   // Required fields
   if (!name || !email || !phone) {
@@ -630,6 +645,15 @@ export async function submitInquiry(data: {
   }
   if (about && about.length > 2000) {
     return { success: false, error: "The 'about' field must be under 2000 characters." };
+  }
+  if (currentCity && currentCity.length > 200) {
+    return { success: false, error: "City name is too long." };
+  }
+  if (jobTitle && jobTitle.length > 200) {
+    return { success: false, error: "Job title is too long." };
+  }
+  if (jobLength && jobLength.length > 100) {
+    return { success: false, error: "Job length is too long." };
   }
 
   // Enum validation
@@ -645,6 +669,15 @@ export async function submitInquiry(data: {
   if (!["yes", "no"].includes(data.has_pets) || !["yes", "no"].includes(data.background_check_consent)) {
     return { success: false, error: "Invalid selection." };
   }
+  if (referralSource && !VALID_REFERRAL_SOURCES.includes(referralSource)) {
+    return { success: false, error: "Invalid referral source." };
+  }
+  if (preferredContact && !VALID_CONTACT_METHODS.includes(preferredContact)) {
+    return { success: false, error: "Invalid contact method." };
+  }
+  if (hasVehicle && !["yes", "no"].includes(hasVehicle)) {
+    return { success: false, error: "Invalid vehicle selection." };
+  }
 
   try {
     const { error } = await supabase.from("inquiries").insert({
@@ -659,17 +692,27 @@ export async function submitInquiry(data: {
       has_pets: data.has_pets,
       background_check_consent: data.background_check_consent,
       about,
+      current_city: currentCity,
+      referral_source: referralSource,
+      preferred_contact: preferredContact,
+      job_title: jobTitle,
+      job_length: jobLength,
+      has_vehicle: hasVehicle,
+      preferred_tour_date: preferredTourDate,
     });
     if (error) throw error;
 
-    // Send email notification (fire-and-forget — don't block the response)
+    // Fetch room + property info for email and GHL
     const { data: roomInfo } = await supabase
       .from("rooms")
-      .select("room_number, properties(name)")
+      .select("room_number, properties(name, city)")
       .eq("id", data.room_id)
       .single();
-    const propName = ((roomInfo as Record<string, unknown>)?.properties as { name: string } | null)?.name ?? "Unknown";
+    const prop = (roomInfo as Record<string, unknown>)?.properties as { name: string; city: string } | null;
+    const propName = prop?.name ?? "Unknown";
+    const propCity = prop?.city ?? "";
 
+    // Send email notification (fire-and-forget)
     sendInquiryEmail({
       name,
       email,
@@ -681,14 +724,64 @@ export async function submitInquiry(data: {
       has_pets: data.has_pets,
       background_check_consent: data.background_check_consent,
       about,
+      current_city: currentCity,
+      referral_source: referralSource,
+      preferred_contact: preferredContact,
+      job_title: jobTitle,
+      job_length: jobLength,
+      has_vehicle: hasVehicle,
+      preferred_tour_date: preferredTourDate,
       room_number: roomInfo?.room_number ?? "Unknown",
       property_name: propName,
-    }).catch(() => {}); // Silently swallow — DB insert already succeeded
+    }).catch(() => {});
+
+    // Push to GHL CRM (fire-and-forget)
+    createOrUpdateGHLContact({
+      name,
+      email,
+      phone,
+      current_city: currentCity,
+      referral_source: referralSource,
+      preferred_contact: preferredContact,
+      employment_status: data.employment_status,
+      job_title: jobTitle,
+      job_length: jobLength,
+      income_range: data.income_range,
+      desired_move_in: data.desired_move_in,
+      occupants: data.occupants,
+      has_pets: data.has_pets,
+      has_vehicle: hasVehicle,
+      background_check_consent: data.background_check_consent,
+      preferred_tour_date: preferredTourDate,
+      about,
+      room_number: roomInfo?.room_number ?? "Unknown",
+      property_name: propName,
+      property_city: propCity,
+    }).catch(() => {});
 
     return { success: true };
   } catch {
     return { success: false, error: "Something went wrong. Please try again." };
   }
+}
+
+export async function getPublicVacantRooms(): Promise<(Room & { property_name: string; property_city: string })[]> {
+  const { data, error } = await supabase
+    .from("rooms")
+    .select("*, properties(name, city)")
+    .eq("status", "vacant")
+    .order("property_id")
+    .order("price", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const { properties: propData, ...room } = row;
+    const p = propData as { name: string; city: string } | null;
+    return {
+      ...room,
+      property_name: p?.name ?? "",
+      property_city: p?.city ?? "",
+    };
+  }) as (Room & { property_name: string; property_city: string })[];
 }
 
 export async function getInquiries(): Promise<(Inquiry & { room_number: string; property_name: string })[]> {

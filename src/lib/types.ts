@@ -56,6 +56,13 @@ export interface Inquiry {
   has_pets: "yes" | "no";
   background_check_consent: "yes" | "no";
   about: string | null;
+  current_city: string | null;
+  referral_source: string | null;
+  preferred_contact: string | null;
+  job_title: string | null;
+  job_length: string | null;
+  has_vehicle: string | null;
+  preferred_tour_date: string | null;
   status: "new" | "reviewed" | "contacted" | "rejected";
   created_at: string;
 }

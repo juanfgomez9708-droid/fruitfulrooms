@@ -7,20 +7,43 @@ import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS, REFERRAL_SOURCE_OPTIONS, CONTACT_ME
 const inputClass =
   "w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent";
 
-export function InquiryForm({ roomId }: { roomId: number }) {
+interface RoomOption {
+  id: number;
+  room_number: string;
+  price: number;
+  property_name: string;
+  property_city: string;
+}
+
+interface PropertyGroup {
+  name: string;
+  city: string;
+  rooms: RoomOption[];
+}
+
+export function ApplyForm({ properties }: { properties: PropertyGroup[] }) {
+  const [selectedProperty, setSelectedProperty] = useState("");
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const currentProperty = properties.find((p) => p.name === selectedProperty);
+  const availableRooms = currentProperty?.rooms ?? [];
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!selectedRoomId) {
+      setError("Please select a property and room.");
+      return;
+    }
     setLoading(true);
     setError(null);
 
     const form = new FormData(e.currentTarget);
 
     const result = await submitInquiry({
-      room_id: roomId,
+      room_id: selectedRoomId,
       name: form.get("name") as string,
       email: form.get("email") as string,
       phone: form.get("phone") as string,
@@ -51,7 +74,7 @@ export function InquiryForm({ roomId }: { roomId: number }) {
 
   if (submitted) {
     return (
-      <div className="card sticky top-8 text-center">
+      <div className="card text-center py-12">
         <div className="text-4xl mb-3">✅</div>
         <h2 className="font-semibold text-lg mb-2">Application Submitted!</h2>
         <p className="text-muted text-sm">
@@ -63,12 +86,7 @@ export function InquiryForm({ roomId }: { roomId: number }) {
   }
 
   return (
-    <div className="card sticky top-8">
-      <h2 className="font-semibold text-lg mb-1">Apply for This Room</h2>
-      <p className="text-muted text-sm mb-4">
-        Fill out the form below and we&apos;ll reach out to schedule a call.
-      </p>
-
+    <div className="card">
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
           {error}
@@ -76,6 +94,54 @@ export function InquiryForm({ roomId }: { roomId: number }) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Property & Room Selection */}
+        <div>
+          <label htmlFor="property" className="block text-sm font-medium mb-1">
+            Which property are you interested in? <span className="text-red-500">*</span>
+          </label>
+          <select
+            id="property"
+            required
+            className={inputClass}
+            value={selectedProperty}
+            onChange={(e) => {
+              setSelectedProperty(e.target.value);
+              setSelectedRoomId(null);
+            }}
+          >
+            <option value="">Select a property...</option>
+            {properties.map((p) => (
+              <option key={p.name} value={p.name}>
+                {p.name} — {p.city}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedProperty && (
+          <div>
+            <label htmlFor="room" className="block text-sm font-medium mb-1">
+              Which room? <span className="text-red-500">*</span>
+            </label>
+            <select
+              id="room"
+              required
+              className={inputClass}
+              value={selectedRoomId ?? ""}
+              onChange={(e) => setSelectedRoomId(Number(e.target.value))}
+            >
+              <option value="">Select a room...</option>
+              {availableRooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.room_number} — ${r.price}/mo
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <hr className="border-card-border" />
+
         {/* Contact Info */}
         <div>
           <label htmlFor="name" className="block text-sm font-medium mb-1">
