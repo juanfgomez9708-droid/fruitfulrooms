@@ -63,8 +63,8 @@ async function ghlRequest(endpoint: string, options: { method?: string; body?: u
   });
 }
 
-async function searchContactByEmail(email: string): Promise<{ id: string } | null> {
-  const res = await ghlRequest(`/contacts/?locationId=${getLocationId()}&query=${encodeURIComponent(email)}`);
+async function searchContact(query: string): Promise<{ id: string } | null> {
+  const res = await ghlRequest(`/contacts/?locationId=${getLocationId()}&query=${encodeURIComponent(query)}`);
   if (!res.ok) return null;
   const data = await res.json();
   const contacts = data.contacts ?? [];
@@ -128,7 +128,7 @@ export async function createOrUpdateGHLContact(inquiry: {
     customFields.push({ id: CUSTOM_FIELDS.VEHICLE, value: inquiry.has_vehicle === "yes" ? "Yes" : "No" });
   }
 
-  const tags = ["Fruitful Rooms", "Website Inquiry", inquiry.property_name].filter(Boolean);
+  const tags = ["Fruitful Rooms", "Website Inquiry", "Co Living Lead", "Notify - Juan", inquiry.property_name].filter(Boolean);
 
   const contactBody = {
     firstName,
@@ -143,8 +143,11 @@ export async function createOrUpdateGHLContact(inquiry: {
   };
 
   try {
-    // Search for existing contact (dedup by email)
-    const existing = await searchContactByEmail(inquiry.email);
+    // Search for existing contact (dedup by email, then phone)
+    let existing = await searchContact(inquiry.email);
+    if (!existing) {
+      existing = await searchContact(inquiry.phone);
+    }
     let contactId: string;
 
     if (existing) {
@@ -165,16 +168,29 @@ export async function createOrUpdateGHLContact(inquiry: {
         method: "POST",
         body: contactBody,
       });
+
       if (!res.ok) {
-        const body = await res.text();
-        console.error("[ghl] Failed to create contact:", res.status, body);
-        return null;
-      }
-      const data = await res.json();
-      contactId = data.contact?.id;
-      if (!contactId) {
-        console.error("[ghl] No contact ID in response");
-        return null;
+        const resBody = await res.json().catch(() => ({}));
+        // Handle GHL duplicate prevention — location blocks duplicate contacts
+        if (res.status === 400 && resBody.meta?.contactId) {
+          console.log("[ghl] Duplicate detected, updating existing contact:", resBody.meta.contactId);
+          contactId = resBody.meta.contactId;
+          // Update the existing contact with our data
+          await ghlRequest(`/contacts/${contactId}`, {
+            method: "PUT",
+            body: contactBody,
+          });
+        } else {
+          console.error("[ghl] Failed to create contact:", res.status, JSON.stringify(resBody));
+          return null;
+        }
+      } else {
+        const data = await res.json();
+        contactId = data.contact?.id;
+        if (!contactId) {
+          console.error("[ghl] No contact ID in response");
+          return null;
+        }
       }
     }
 
