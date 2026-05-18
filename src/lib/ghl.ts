@@ -26,6 +26,18 @@ const CITY_MAP: Record<string, string> = {
   "Ormond Beach, FL": "Ormond Beach",
 };
 
+function formatPhone(phone: string): string {
+  // Strip to digits only
+  const digits = phone.replace(/\D/g, "");
+  // Remove leading 1 if 11 digits (US country code)
+  const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  // Format as (XXX) XXX-XXXX if 10 digits
+  if (local.length === 10) {
+    return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
+  }
+  return phone; // Return as-is if not a standard 10-digit US number
+}
+
 function splitName(fullName: string): { firstName: string; lastName: string } {
   const parts = fullName.trim().split(/\s+/);
   if (parts.length === 1) return { firstName: parts[0], lastName: "" };
@@ -134,7 +146,7 @@ export async function createOrUpdateGHLContact(inquiry: {
     firstName,
     lastName,
     email: inquiry.email,
-    phone: inquiry.phone,
+    phone: formatPhone(inquiry.phone),
     city: inquiry.current_city || undefined,
     source: inquiry.referral_source || "Website",
     locationId: getLocationId(),
