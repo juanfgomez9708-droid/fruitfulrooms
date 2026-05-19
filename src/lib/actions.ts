@@ -408,17 +408,25 @@ export async function updateTenant(
   const existing = await getTenant(id);
   if (!existing) return null;
 
-  // If room assignment changed, update room statuses
-  const newRoomId = data.room_id !== undefined ? data.room_id : existing.room_id;
-  if (existing.room_id !== newRoomId) {
-    // Free old room
+  const newStatus = data.status ?? existing.status;
+  let newRoomId = data.room_id !== undefined ? data.room_id : existing.room_id;
+
+  // If tenant is being moved out, free their room and clear assignment
+  if (newStatus === "moved_out" && existing.status !== "moved_out" && newRoomId) {
+    await supabaseAdmin
+      .from("rooms")
+      .update({ status: "vacant" })
+      .eq("id", newRoomId);
+    newRoomId = null;
+    revalidatePath("/listings");
+  } else if (existing.room_id !== newRoomId) {
+    // Room assignment changed — update room statuses
     if (existing.room_id) {
       await supabaseAdmin
         .from("rooms")
         .update({ status: "vacant" })
         .eq("id", existing.room_id);
     }
-    // Occupy new room
     if (newRoomId) {
       await supabaseAdmin
         .from("rooms")
@@ -436,7 +444,7 @@ export async function updateTenant(
       phone: data.phone ?? existing.phone,
       room_id: newRoomId,
       move_in_date: data.move_in_date ?? existing.move_in_date,
-      status: data.status ?? existing.status,
+      status: newStatus,
     })
     .eq("id", id)
     .select()
