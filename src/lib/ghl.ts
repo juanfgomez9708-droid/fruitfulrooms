@@ -241,3 +241,75 @@ export async function createOrUpdateGHLContact(inquiry: {
     return null;
   }
 }
+
+// ─── SMS Notifications ────────────────────────────────────────────────────────
+
+function getNotifyPhone(): string | undefined { return process.env.NOTIFY_PHONE; }
+
+async function sendSMS(contactId: string, message: string): Promise<boolean> {
+  if (!getApiKey()) {
+    console.log("[ghl] GHL_API_KEY not set — skipping SMS");
+    return false;
+  }
+
+  try {
+    const res = await ghlRequest("/conversations/messages", {
+      method: "POST",
+      body: {
+        type: "SMS",
+        contactId,
+        message,
+      },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error("[ghl] SMS send failed:", res.status, body);
+      return false;
+    }
+
+    console.log(`[ghl] SMS sent to contact ${contactId}`);
+    return true;
+  } catch (err) {
+    console.error("[ghl] SMS send error:", err);
+    return false;
+  }
+}
+
+export async function sendApplicantSMS(contactId: string, info: {
+  name: string;
+  propertyName: string;
+  roomNumber: string;
+}): Promise<void> {
+  const firstName = info.name.trim().split(/\s+/)[0];
+  const message =
+    `Hi ${firstName}! Thanks for your interest in ${info.propertyName}. ` +
+    `We've received your application for Room ${info.roomNumber.replace(/^Room\s*/i, "")}. ` +
+    `Our team will review it and get back to you shortly. — Fruitful Rooms`;
+
+  await sendSMS(contactId, message);
+}
+
+export async function sendOwnerNotificationSMS(info: {
+  name: string;
+  propertyName: string;
+  roomNumber: string;
+}): Promise<void> {
+  const notifyPhone = getNotifyPhone();
+  if (!notifyPhone) {
+    console.log("[ghl] NOTIFY_PHONE not set — skipping owner SMS notification");
+    return;
+  }
+
+  // Find owner's GHL contact by phone number
+  const owner = await searchContact(notifyPhone);
+  if (!owner) {
+    console.error("[ghl] Owner contact not found in GHL for phone:", notifyPhone);
+    return;
+  }
+
+  const message =
+    `New app: ${info.name} — ${info.propertyName}, Room ${info.roomNumber.replace(/^Room\s*/i, "")}`;
+
+  await sendSMS(owner.id, message);
+}

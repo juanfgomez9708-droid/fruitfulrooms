@@ -7,7 +7,7 @@ import { VALID_EMPLOYMENT, VALID_INCOME, VALID_REFERRAL_SOURCES, VALID_CONTACT_M
 import { getCurrentMonth } from "./utils";
 import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats } from "./types";
 import { sendInquiryEmail } from "./email";
-import { createOrUpdateGHLContact } from "./ghl";
+import { createOrUpdateGHLContact, sendApplicantSMS, sendOwnerNotificationSMS } from "./ghl";
 
 /** Returns the first day of the month after the given YYYY-MM string. */
 function nextMonthStart(yyyyMm: string): string {
@@ -715,7 +715,7 @@ export async function submitInquiry(data: {
     // Send email + push to GHL in parallel (awaited so Next.js doesn't kill them)
     const roomNumber = roomInfo?.room_number ?? "Unknown";
 
-    await Promise.allSettled([
+    const [, ghlResult] = await Promise.allSettled([
       sendInquiryEmail({
         name,
         email,
@@ -760,6 +760,19 @@ export async function submitInquiry(data: {
         property_city: propCity,
       }),
     ]);
+
+    // Send SMS notifications after GHL contact creation
+    const contactId = ghlResult.status === "fulfilled" ? ghlResult.value?.contactId : null;
+    if (contactId) {
+      await Promise.allSettled([
+        sendApplicantSMS(contactId, { name, propertyName: propName, roomNumber }),
+        sendOwnerNotificationSMS({
+          name,
+          propertyName: propName,
+          roomNumber,
+        }),
+      ]);
+    }
 
     return { success: true };
   } catch {
