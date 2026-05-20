@@ -45,7 +45,7 @@ export default async function InquiryDetailPage({
               <div>
                 <h1 className="text-2xl font-bold">{inquiry.name}</h1>
                 <p className="text-gray-500 text-sm mt-1">
-                  Applied for {inquiry.room_number} at {inquiry.property_name} — {inquiry.property_city}
+                  Applied for {inquiry.room_number === "Whole House" ? `${inquiry.property_name} (Whole House)` : `${inquiry.room_number} at ${inquiry.property_name}`} — {inquiry.property_city}
                 </p>
               </div>
               <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium capitalize ${INQUIRY_STATUS_COLORS[inquiry.status] ?? "bg-gray-100 text-gray-800"}`}>
@@ -63,7 +63,7 @@ export default async function InquiryDetailPage({
                 <a href={`tel:${inquiry.phone}`} className="text-blue-600 hover:underline">{inquiry.phone}</a>
               </div>
               <div>
-                <span className="text-gray-500 block">Room Price</span>
+                <span className="text-gray-500 block">{inquiry.room_number === "Whole House" ? "Rent" : "Room Price"}</span>
                 <span className="font-medium">${inquiry.room_price}/mo</span>
               </div>
               {inquiry.current_city && (

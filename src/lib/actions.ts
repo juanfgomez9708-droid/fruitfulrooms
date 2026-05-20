@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabase, supabaseAdmin } from "./supabase";
 import { requireAuth } from "./auth";
-import { VALID_EMPLOYMENT, VALID_INCOME, VALID_REFERRAL_SOURCES, VALID_CONTACT_METHODS, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
+import { VALID_EMPLOYMENT, VALID_INCOME, VALID_OCCUPANTS, VALID_REFERRAL_SOURCES, VALID_CONTACT_METHODS, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
 import { getCurrentMonth } from "./utils";
 import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats } from "./types";
 import { sendInquiryEmail } from "./email";
@@ -44,6 +44,13 @@ export async function createProperty(data: {
   city: string;
   description?: string;
   photo_url?: string;
+  rental_type?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  price?: number;
+  status?: string;
+  lease_minimum?: string;
+  utilities_included?: boolean;
 }): Promise<Property> {
   await requireAuth();
   const { data: result, error } = await supabaseAdmin
@@ -54,18 +61,30 @@ export async function createProperty(data: {
       city: data.city,
       description: data.description ?? null,
       photo_url: data.photo_url ?? null,
+      rental_type: data.rental_type ?? "co-living",
+      bedrooms: data.bedrooms ?? null,
+      bathrooms: data.bathrooms ?? null,
+      price: data.price ?? null,
+      status: data.rental_type === "whole-house" ? (data.status ?? "available") : null,
+      lease_minimum: data.lease_minimum ?? null,
+      utilities_included: data.utilities_included ?? true,
     })
     .select()
     .single();
   if (error) throw error;
   revalidatePath("/admin/properties");
   revalidatePath("/admin");
+  revalidatePath("/listings");
   return result as Property;
 }
 
 export async function updateProperty(
   id: number,
-  data: { name?: string; address?: string; city?: string; description?: string; photo_url?: string }
+  data: {
+    name?: string; address?: string; city?: string; description?: string; photo_url?: string;
+    rental_type?: string; bedrooms?: number; bathrooms?: number; price?: number;
+    status?: string; lease_minimum?: string; utilities_included?: boolean;
+  }
 ): Promise<Property | null> {
   await requireAuth();
   const existing = await getProperty(id);
@@ -79,6 +98,13 @@ export async function updateProperty(
       city: data.city ?? existing.city,
       description: data.description ?? existing.description,
       photo_url: data.photo_url ?? existing.photo_url,
+      rental_type: data.rental_type ?? existing.rental_type,
+      bedrooms: data.bedrooms ?? existing.bedrooms,
+      bathrooms: data.bathrooms ?? existing.bathrooms,
+      price: data.price ?? existing.price,
+      status: data.status ?? existing.status,
+      lease_minimum: data.lease_minimum ?? existing.lease_minimum,
+      utilities_included: data.utilities_included ?? existing.utilities_included,
     })
     .eq("id", id)
     .select()
@@ -87,6 +113,7 @@ export async function updateProperty(
   revalidatePath("/admin/properties");
   revalidatePath(`/admin/properties/${id}`);
   revalidatePath("/admin");
+  revalidatePath("/listings");
   return result as Property;
 }
 
@@ -285,7 +312,13 @@ export async function getPublicProperties(): Promise<(Property & { vacant_count:
     .from("public_properties_with_vacancies")
     .select("*");
   if (error) throw error;
-  return (data ?? []) as (Property & { vacant_count: number; min_price: number })[];
+  // Map view column aliases back to Property field names
+  return (data ?? []).map((row: Record<string, unknown>) => ({
+    ...row,
+    price: row.property_price ?? row.price ?? null,
+    status: row.property_status ?? row.status ?? null,
+    photos: row.property_photos ?? row.photos ?? null,
+  })) as (Property & { vacant_count: number; min_price: number })[];
 }
 
 export async function getPropertyVacantRooms(propertyId: number): Promise<Room[]> {
@@ -610,7 +643,8 @@ export async function markPaymentPaid(id: number): Promise<Payment | null> {
 // ─── Inquiries ──────────────────────────────────────────────────────────────
 
 export async function submitInquiry(data: {
-  room_id: number;
+  room_id?: number;
+  property_id?: number;
   name: string;
   email: string;
   phone: string;
@@ -642,6 +676,11 @@ export async function submitInquiry(data: {
   const hasVehicle = data.has_vehicle || null;
   const preferredTourDate = data.preferred_tour_date || null;
 
+  // Must target either a room or a property
+  if (!data.room_id && !data.property_id) {
+    return { success: false, error: "Invalid inquiry target." };
+  }
+
   // Required fields
   if (!name || !email || !phone) {
     return { success: false, error: "Name, email, and phone are required." };
@@ -671,7 +710,7 @@ export async function submitInquiry(data: {
   if (!VALID_INCOME.includes(data.income_range)) {
     return { success: false, error: "Invalid income range." };
   }
-  if (!["1", "2"].includes(data.occupants)) {
+  if (!VALID_OCCUPANTS.includes(data.occupants)) {
     return { success: false, error: "Invalid occupants value." };
   }
   if (!["yes", "no"].includes(data.has_pets) || !["yes", "no"].includes(data.background_check_consent)) {
@@ -689,7 +728,8 @@ export async function submitInquiry(data: {
 
   try {
     const { error } = await supabase.from("inquiries").insert({
-      room_id: data.room_id,
+      room_id: data.room_id ?? null,
+      property_id: data.property_id ?? null,
       name,
       email,
       phone,
@@ -710,19 +750,32 @@ export async function submitInquiry(data: {
     });
     if (error) throw error;
 
-    // Fetch room + property info for email and GHL
-    const { data: roomInfo } = await supabase
-      .from("rooms")
-      .select("room_number, properties(name, city)")
-      .eq("id", data.room_id)
-      .single();
-    const prop = (roomInfo as Record<string, unknown>)?.properties as { name: string; city: string } | null;
-    const propName = prop?.name ?? "Unknown";
-    const propCity = prop?.city ?? "";
+    // Resolve property/room info for email, GHL, and SMS
+    let propName = "Unknown";
+    let propCity = "";
+    let roomNumber = "Whole House";
+
+    if (data.room_id) {
+      const { data: roomInfo } = await supabase
+        .from("rooms")
+        .select("room_number, properties(name, city)")
+        .eq("id", data.room_id)
+        .single();
+      const prop = (roomInfo as Record<string, unknown>)?.properties as { name: string; city: string } | null;
+      propName = prop?.name ?? "Unknown";
+      propCity = prop?.city ?? "";
+      roomNumber = roomInfo?.room_number ?? "Unknown";
+    } else if (data.property_id) {
+      const { data: propInfo } = await supabase
+        .from("properties")
+        .select("name, city")
+        .eq("id", data.property_id)
+        .single();
+      propName = propInfo?.name ?? "Unknown";
+      propCity = propInfo?.city ?? "";
+    }
 
     // Send email + push to GHL in parallel (awaited so Next.js doesn't kill them)
-    const roomNumber = roomInfo?.room_number ?? "Unknown";
-
     const [, ghlResult] = await Promise.allSettled([
       sendInquiryEmail({
         name,
@@ -811,17 +864,18 @@ export async function getInquiries(): Promise<(Inquiry & { room_number: string; 
   await requireAuth();
   const { data, error } = await supabaseAdmin
     .from("inquiries")
-    .select("*, rooms(room_number, properties(name))")
+    .select("*, rooms(room_number, properties(name)), properties(name)")
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) throw error;
   return (data ?? []).map((row: Record<string, unknown>) => {
-    const { rooms: roomData, ...inquiry } = row;
+    const { rooms: roomData, properties: propData, ...inquiry } = row;
     const r = roomData as { room_number: string; properties: { name: string } } | null;
+    const p = propData as { name: string } | null;
     return {
       ...inquiry,
-      room_number: r?.room_number ?? "",
-      property_name: r?.properties?.name ?? "",
+      room_number: r?.room_number ?? (inquiry.room_id ? "" : "Whole House"),
+      property_name: r?.properties?.name ?? p?.name ?? "",
     };
   }) as (Inquiry & { room_number: string; property_name: string })[];
 }
@@ -830,20 +884,21 @@ export async function getInquiry(id: number): Promise<(Inquiry & { room_number: 
   await requireAuth();
   const { data, error } = await supabaseAdmin
     .from("inquiries")
-    .select("*, rooms(room_number, price, properties(name, city))")
+    .select("*, rooms(room_number, price, properties(name, city)), properties(name, city, price)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
 
-  const { rooms: roomData, ...inquiry } = data as Record<string, unknown>;
+  const { rooms: roomData, properties: propData, ...inquiry } = data as Record<string, unknown>;
   const r = roomData as { room_number: string; price: number; properties: { name: string; city: string } } | null;
+  const p = propData as { name: string; city: string; price: number } | null;
   return {
     ...inquiry,
-    room_number: r?.room_number ?? "",
-    room_price: r?.price ?? 0,
-    property_name: r?.properties?.name ?? "",
-    property_city: r?.properties?.city ?? "",
+    room_number: r?.room_number ?? (inquiry.room_id ? "" : "Whole House"),
+    room_price: r?.price ?? p?.price ?? 0,
+    property_name: r?.properties?.name ?? p?.name ?? "",
+    property_city: r?.properties?.city ?? p?.city ?? "",
   } as Inquiry & { room_number: string; property_name: string; room_price: number; property_city: string };
 }
 

@@ -5,6 +5,14 @@ export interface Property {
   city: string;
   description: string | null;
   photo_url: string | null;
+  rental_type: "co-living" | "whole-house";
+  bedrooms: number | null;
+  bathrooms: number | null;
+  price: number | null;
+  status: "available" | "rented" | "maintenance" | null;
+  lease_minimum: string | null;
+  utilities_included: boolean;
+  photos: string[] | null;
   created_at: string;
 }
 
@@ -45,14 +53,15 @@ export interface Payment {
 
 export interface Inquiry {
   id: number;
-  room_id: number;
+  room_id: number | null;
+  property_id: number | null;
   name: string;
   email: string;
   phone: string;
   employment_status: "employed" | "self_employed" | "student" | "unemployed" | "retired";
   income_range: "0_1000" | "1000_2000" | "2000_3000" | "3000_plus";
   desired_move_in: string;
-  occupants: "1" | "2";
+  occupants: "1" | "2" | "3" | "4" | "5" | "6+";
   has_pets: "yes" | "no";
   background_check_consent: "yes" | "no";
   about: string | null;

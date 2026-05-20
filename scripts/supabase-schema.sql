@@ -68,7 +68,7 @@ CREATE TABLE payments (
 CREATE TABLE expenses (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   property_id BIGINT NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
-  category TEXT NOT NULL CHECK (category IN ('mortgage', 'electricity', 'water', 'internet', 'pest_control', 'repairs', 'cleaning', 'lender_payment', 'other')),
+  category TEXT NOT NULL CHECK (category IN ('mortgage', 'electricity', 'water', 'internet', 'pest_control', 'repairs', 'cleaning', 'lender_payment', 'landscaping', 'other')),
   amount NUMERIC(10,2) NOT NULL,
   month TEXT NOT NULL,
   notes TEXT,

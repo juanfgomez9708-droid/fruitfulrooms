@@ -935,3 +935,36 @@ REQUIREMENTS:
 Apply online at https://fruitfulrooms.com/listings/[room-id] or contact us:
 Phone: (386) 260-4229
 Email: rentals@fruitfulhomeoffers.com
+
+Facebook post inside of groups
+
+🏠 Furnished room available NOW at Continental House in Orlando, FL! (Near Silver Star Rd & Pine Hills Rd)  
+
+💰 $850/month — ALL utilities included (Wi-Fi, electric, water)  
+📅 Move-in fee: $199 | NO security deposit  
+🔑 No brokers, no hidden fees
+
+  
+
+✅ What's included:  
+• Fully furnished (bed, mattress, nightstand, work desk, closet)  
+• Central AC  
+• Washer/dryer access  
+• Shared kitchen & living room  
+• Backyard  
+• Smart locks & security cameras  
+• Driveway & street parking
+
+  
+
+📍 15 minutes from Downtown Orlando, convenient access to major highways, grocery stores, and public transportation.
+
+🏡 ~1,600 sq ft single-family home with 8 bedrooms and 2 bathrooms.
+
+  
+
+👉 Apply online: [https://fruitfulrooms.com/listings/property/8](https://fruitfulrooms.com/listings/property/8)  
+📞 Call/Text: (386) 260-4229  
+📧 [rentals@fruitfulhomeoffers.com](mailto:rentals@fruitfulhomeoffers.com)
+
+Serious inquiries only. Background check required.

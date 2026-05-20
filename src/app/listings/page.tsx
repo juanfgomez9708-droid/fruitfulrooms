@@ -19,7 +19,9 @@ export const metadata = {
 export default async function ListingsPage() {
   const properties = await getPublicProperties();
 
-  const totalRooms = properties.reduce((sum, p) => sum + p.vacant_count, 0);
+  const colivingProps = properties.filter(p => p.rental_type === "co-living");
+  const totalRooms = colivingProps.reduce((sum, p) => sum + p.vacant_count, 0);
+  const wholeHouseCount = properties.filter(p => p.rental_type === "whole-house").length;
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -29,8 +31,9 @@ export default async function ListingsPage() {
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
         <h1 className="text-3xl font-bold mb-2">Our Properties</h1>
         <p className="text-muted mb-8">
-          {totalRooms} {totalRooms === 1 ? "room" : "rooms"} available across{" "}
-          {properties.length} {properties.length === 1 ? "property" : "properties"}
+          {totalRooms} {totalRooms === 1 ? "room" : "rooms"}
+          {wholeHouseCount > 0 && <> and {wholeHouseCount} {wholeHouseCount === 1 ? "home" : "homes"}</>}
+          {" "}available across {properties.length} {properties.length === 1 ? "property" : "properties"}
         </p>
 
         {properties.length === 0 ? (
@@ -76,6 +79,7 @@ export default async function ListingsPage() {
                   {/* Stats Row */}
                   <div className="flex items-center gap-4 mb-4">
                     <div className="flex items-baseline gap-1">
+                      {property.rental_type === "co-living" && <span className="text-sm text-muted">From</span>}
                       <span className="text-2xl font-bold text-accent">
                         ${property.min_price}
                       </span>
@@ -84,9 +88,20 @@ export default async function ListingsPage() {
                     <span className="text-sm text-muted">•</span>
                     <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full">
                       <span className="w-2 h-2 rounded-full bg-green-500" />
-                      {property.vacant_count} {property.vacant_count === 1 ? "room" : "rooms"} available
+                      {property.rental_type === "whole-house"
+                        ? "Whole House Available"
+                        : `${property.vacant_count} ${property.vacant_count === 1 ? "room" : "rooms"} available`}
                     </span>
                   </div>
+
+                  {/* Whole-house badges */}
+                  {property.rental_type === "whole-house" && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {property.bedrooms && <span className="badge bg-accent-light text-accent">{property.bedrooms} bed</span>}
+                      {property.bathrooms && <span className="badge bg-accent-light text-accent">{property.bathrooms} bath</span>}
+                      {property.lease_minimum && <span className="badge bg-accent-light text-accent">{property.lease_minimum} min lease</span>}
+                    </div>
+                  )}
 
                   {/* Description Preview */}
                   {property.description && (
@@ -97,7 +112,7 @@ export default async function ListingsPage() {
 
                   {/* CTA */}
                   <div className="text-sm font-medium text-accent group-hover:underline">
-                    View Rooms →
+                    {property.rental_type === "whole-house" ? "View Property →" : "View Rooms →"}
                   </div>
                 </div>
               </Link>

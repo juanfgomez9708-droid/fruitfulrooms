@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getAllRooms, getProperties, deleteRoom } from "@/lib/actions";
 import { RoomFilters } from "./RoomFilters";
 
+export const dynamic = "force-dynamic";
+
 export default async function RoomsPage({
   searchParams,
 }: {

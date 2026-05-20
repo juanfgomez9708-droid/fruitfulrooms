@@ -45,8 +45,13 @@ export async function sendInquiryEmail(inquiry: {
     return;
   }
 
+  const isWholeHouse = inquiry.room_number === "Whole House";
+  const heading = isWholeHouse
+    ? `New Inquiry — ${inquiry.property_name} (Whole House)`
+    : `New Inquiry — ${inquiry.property_name}, ${inquiry.room_number}`;
+
   const html = `
-<h2>New Inquiry — ${inquiry.property_name}, ${inquiry.room_number}</h2>
+<h2>${heading}</h2>
 
 <h3>Applicant</h3>
 <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
@@ -70,7 +75,7 @@ export async function sendInquiryEmail(inquiry: {
 <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
   <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Desired Move-in</td><td>${inquiry.desired_move_in}</td></tr>
   ${inquiry.preferred_tour_date ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Tour Date</td><td>${inquiry.preferred_tour_date}</td></tr>` : ""}
-  <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Occupants</td><td>${inquiry.occupants === "1" ? "Just me" : "2 people"}</td></tr>
+  <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Occupants</td><td>${inquiry.occupants}</td></tr>
   <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Pets</td><td>${inquiry.has_pets === "yes" ? "Yes" : "No"}</td></tr>
   ${inquiry.has_vehicle ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Vehicle</td><td>${inquiry.has_vehicle === "yes" ? "Yes" : "No"}</td></tr>` : ""}
   <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Background Check</td><td>${inquiry.background_check_consent === "yes" ? "Yes" : "No"}</td></tr>
@@ -94,7 +99,9 @@ ${inquiry.about ? `<h3>About</h3><p style="font-family:sans-serif;font-size:14px
       body: JSON.stringify({
         from: "Fruitful Rooms <team@fruitfulhomeoffers.com>",
         to: NOTIFY_EMAIL,
-        subject: `New Inquiry: ${inquiry.name} — ${inquiry.property_name} ${inquiry.room_number}`,
+        subject: isWholeHouse
+          ? `New Inquiry: ${inquiry.name} — ${inquiry.property_name} (Whole House)`
+          : `New Inquiry: ${inquiry.name} — ${inquiry.property_name} ${inquiry.room_number}`,
         html,
       }),
     });

@@ -5,6 +5,7 @@ import { getPublicProperty, getPropertyVacantRooms } from "@/lib/actions";
 import { parseAmenities } from "@/lib/utils";
 import { PublicHeader } from "@/app/components/PublicHeader";
 import { PublicFooter } from "@/app/components/PublicFooter";
+import { InquiryForm } from "@/app/listings/[id]/InquiryForm";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,18 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!property) {
     return { title: "Property Not Found" };
   }
+
+  if (property.rental_type === "whole-house") {
+    const title = `${property.name} — ${property.bedrooms ?? ""}bd/${property.bathrooms ?? ""}ba Home for Rent in ${property.city} — $${property.price}/mo`;
+    const description = property.description ?? `${property.bedrooms}-bedroom home for rent in ${property.city}. $${property.price}/month. Apply online.`;
+    return {
+      title,
+      description,
+      openGraph: { title, description, url: `https://fruitfulrooms.com/listings/property/${id}` },
+      alternates: { canonical: `https://fruitfulrooms.com/listings/property/${id}` },
+    };
+  }
+
   const rooms = await getCachedRooms(Number(id));
   const minPrice = rooms.length > 0 ? Math.min(...rooms.map((r) => r.price)) : 0;
   const title = `Rooms for Rent at ${property.name} in ${property.city} — From $${minPrice}/mo`;
@@ -42,6 +55,109 @@ export default async function PropertyDetailPage({
     redirect("/listings");
   }
 
+  // Whole-house: show property details + inquiry form directly
+  if (property.rental_type === "whole-house") {
+    return (
+      <div className="min-h-screen flex flex-col bg-background text-foreground">
+        <PublicHeader />
+        <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
+          {/* Breadcrumb */}
+          <Link
+            href="/listings"
+            className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-6"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+            All Properties
+          </Link>
+
+          {/* Property Hero */}
+          {property.photo_url ? (
+            <img
+              src={property.photo_url}
+              alt={property.name}
+              className="w-full h-64 sm:h-80 object-cover rounded-xl mb-8"
+            />
+          ) : (
+            <div className="w-full h-64 sm:h-80 bg-gradient-to-br from-gradient-start via-gradient-mid to-gradient-end rounded-xl mb-8 flex items-center justify-center">
+              <span className="text-white/70 text-5xl font-light">{property.name}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left column: property details */}
+            <div className="lg:col-span-2">
+              <h1 className="text-3xl font-bold mb-1">{property.name}</h1>
+              <p className="text-muted mb-4">{property.address}, {property.city}</p>
+
+              <div className="flex flex-wrap items-center gap-4 mb-6">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold text-accent">${property.price}</span>
+                  <span className="text-sm text-muted">/mo</span>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  Available Now
+                </span>
+              </div>
+
+              {/* Property specs */}
+              <div className="flex flex-wrap gap-3 mb-6">
+                {property.bedrooms && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium">
+                    {property.bedrooms} {property.bedrooms === 1 ? "Bedroom" : "Bedrooms"}
+                  </span>
+                )}
+                {property.bathrooms && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium">
+                    {property.bathrooms} {property.bathrooms === 1 ? "Bathroom" : "Bathrooms"}
+                  </span>
+                )}
+              </div>
+
+              {property.description && (
+                <p className="text-muted leading-relaxed mb-8">{property.description}</p>
+              )}
+
+              <hr className="border-card-border mb-6" />
+
+              {/* Lease Terms */}
+              <h2 className="text-xl font-bold mb-4">Lease Terms</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                {property.lease_minimum && (
+                  <div className="rounded-lg bg-gray-50 p-4">
+                    <span className="text-muted text-sm block mb-1">Minimum Lease</span>
+                    <span className="font-medium">{property.lease_minimum}</span>
+                  </div>
+                )}
+                <div className="rounded-lg bg-gray-50 p-4">
+                  <span className="text-muted text-sm block mb-1">Utilities</span>
+                  <span className="font-medium">
+                    {property.utilities_included
+                      ? "Included in rent"
+                      : "Tenant responsible — all utilities transfer to tenant's name"}
+                  </span>
+                </div>
+                <div className="rounded-lg bg-gray-50 p-4">
+                  <span className="text-muted text-sm block mb-1">Longer Lease</span>
+                  <span className="font-medium">Available — ask for details</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right column: inquiry form */}
+            <div>
+              <InquiryForm propertyId={property.id} rentalType="whole-house" />
+            </div>
+          </div>
+        </main>
+        <PublicFooter />
+      </div>
+    );
+  }
+
+  // Co-living: existing room grid behavior
   const rooms = await getCachedRooms(Number(id));
 
   if (rooms.length === 0) {

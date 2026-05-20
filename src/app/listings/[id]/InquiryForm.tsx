@@ -2,15 +2,26 @@
 
 import { useState } from "react";
 import { submitInquiry } from "@/lib/actions";
-import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS, REFERRAL_SOURCE_OPTIONS, CONTACT_METHOD_OPTIONS } from "@/lib/constants";
+import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS, REFERRAL_SOURCE_OPTIONS, CONTACT_METHOD_OPTIONS, OCCUPANT_OPTIONS_COLIVING, OCCUPANT_OPTIONS_WHOLEHOUSE } from "@/lib/constants";
 
 const inputClass =
   "w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent";
 
-export function InquiryForm({ roomId }: { roomId: number }) {
+export function InquiryForm({
+  roomId,
+  propertyId,
+  rentalType = "co-living",
+}: {
+  roomId?: number;
+  propertyId?: number;
+  rentalType?: "co-living" | "whole-house";
+}) {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const isWholeHouse = rentalType === "whole-house";
+  const occupantOptions = isWholeHouse ? OCCUPANT_OPTIONS_WHOLEHOUSE : OCCUPANT_OPTIONS_COLIVING;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,6 +32,7 @@ export function InquiryForm({ roomId }: { roomId: number }) {
 
     const result = await submitInquiry({
       room_id: roomId,
+      property_id: propertyId,
       name: form.get("name") as string,
       email: form.get("email") as string,
       phone: form.get("phone") as string,
@@ -64,7 +76,9 @@ export function InquiryForm({ roomId }: { roomId: number }) {
 
   return (
     <div className="card sticky top-8">
-      <h2 className="font-semibold text-lg mb-1">Apply for This Room</h2>
+      <h2 className="font-semibold text-lg mb-1">
+        {isWholeHouse ? "Apply for This Home" : "Apply for This Room"}
+      </h2>
       <p className="text-muted text-sm mb-4">
         Fill out the form below and we&apos;ll reach out to schedule a call.
       </p>
@@ -192,11 +206,15 @@ export function InquiryForm({ roomId }: { roomId: number }) {
         {/* Screening */}
         <div>
           <label htmlFor="occupants" className="block text-sm font-medium mb-1">
-            How many people will occupy the room? <span className="text-red-500">*</span>
+            {isWholeHouse
+              ? "How many people will live in the home?"
+              : "How many people will occupy the room?"
+            } <span className="text-red-500">*</span>
           </label>
           <select id="occupants" name="occupants" required className={inputClass}>
-            <option value="1">Just me</option>
-            <option value="2">2 people</option>
+            {occupantOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
         </div>
 
@@ -240,7 +258,10 @@ export function InquiryForm({ roomId }: { roomId: number }) {
             name="about"
             rows={3}
             maxLength={2000}
-            placeholder="Work situation, lifestyle, why you're looking for a room..."
+            placeholder={isWholeHouse
+              ? "Family size, work situation, why you're looking for a home..."
+              : "Work situation, lifestyle, why you're looking for a room..."
+            }
             className={`${inputClass} resize-none`}
           />
         </div>

@@ -18,6 +18,22 @@ export const INCOME_OPTIONS = [
   { value: "3000_plus", label: "$3,000+" },
 ] as const;
 
+export const OCCUPANT_OPTIONS_COLIVING = [
+  { value: "1", label: "Just me" },
+  { value: "2", label: "2 people" },
+] as const;
+
+export const OCCUPANT_OPTIONS_WHOLEHOUSE = [
+  { value: "1", label: "1 person" },
+  { value: "2", label: "2 people" },
+  { value: "3", label: "3 people" },
+  { value: "4", label: "4 people" },
+  { value: "5", label: "5 people" },
+  { value: "6+", label: "6+ people" },
+] as const;
+
+export const VALID_OCCUPANTS = ["1", "2", "3", "4", "5", "6+"] as string[];
+
 export const INQUIRY_STATUSES = ["new", "reviewed", "contacted", "rejected"] as const;
 
 export const INQUIRY_STATUS_COLORS: Record<string, string> = {

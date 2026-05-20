@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { getTenant, updateTenant, getVacantRooms, getAllRooms } from "@/lib/actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function EditTenantPage({
   params,
 }: {
