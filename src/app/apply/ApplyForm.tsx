@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { submitInquiry } from "@/lib/actions";
-import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS, REFERRAL_SOURCE_OPTIONS, CONTACT_METHOD_OPTIONS } from "@/lib/constants";
+import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS, REFERRAL_SOURCE_OPTIONS, CONTACT_METHOD_OPTIONS, OCCUPANT_OPTIONS_COLIVING, OCCUPANT_OPTIONS_WHOLEHOUSE } from "@/lib/constants";
 
 const inputClass =
   "w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent";
@@ -18,6 +18,9 @@ interface RoomOption {
 interface PropertyGroup {
   name: string;
   city: string;
+  rentalType: "co-living" | "whole-house";
+  propertyId?: number;
+  price?: number | null;
   rooms: RoomOption[];
 }
 
@@ -29,12 +32,17 @@ export function ApplyForm({ properties }: { properties: PropertyGroup[] }) {
   const [loading, setLoading] = useState(false);
 
   const currentProperty = properties.find((p) => p.name === selectedProperty);
+  const isWholeHouse = currentProperty?.rentalType === "whole-house";
   const availableRooms = currentProperty?.rooms ?? [];
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!selectedRoomId) {
+    if (!isWholeHouse && !selectedRoomId) {
       setError("Please select a property and room.");
+      return;
+    }
+    if (isWholeHouse && !currentProperty?.propertyId) {
+      setError("Please select a property.");
       return;
     }
     setLoading(true);
@@ -43,7 +51,8 @@ export function ApplyForm({ properties }: { properties: PropertyGroup[] }) {
     const form = new FormData(e.currentTarget);
 
     const result = await submitInquiry({
-      room_id: selectedRoomId,
+      room_id: isWholeHouse ? undefined : (selectedRoomId ?? undefined),
+      property_id: isWholeHouse ? currentProperty?.propertyId : undefined,
       name: form.get("name") as string,
       email: form.get("email") as string,
       phone: form.get("phone") as string,
@@ -112,13 +121,19 @@ export function ApplyForm({ properties }: { properties: PropertyGroup[] }) {
             <option value="">Select a property...</option>
             {properties.map((p) => (
               <option key={p.name} value={p.name}>
-                {p.name} — {p.city}
+                {p.name} — {p.city}{p.rentalType === "whole-house" ? " (Whole House)" : ""}
               </option>
             ))}
           </select>
         </div>
 
-        {selectedProperty && (
+        {selectedProperty && isWholeHouse && currentProperty?.price && (
+          <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+            Whole house rental — ${currentProperty.price}/mo
+          </div>
+        )}
+
+        {selectedProperty && !isWholeHouse && (
           <div>
             <label htmlFor="room" className="block text-sm font-medium mb-1">
               Which room? <span className="text-red-500">*</span>
@@ -258,11 +273,15 @@ export function ApplyForm({ properties }: { properties: PropertyGroup[] }) {
         {/* Screening */}
         <div>
           <label htmlFor="occupants" className="block text-sm font-medium mb-1">
-            How many people will occupy the room? <span className="text-red-500">*</span>
+            {isWholeHouse
+              ? "How many people will live in the home?"
+              : "How many people will occupy the room?"
+            } <span className="text-red-500">*</span>
           </label>
           <select id="occupants" name="occupants" required className={inputClass}>
-            <option value="1">Just me</option>
-            <option value="2">2 people</option>
+            {(isWholeHouse ? OCCUPANT_OPTIONS_WHOLEHOUSE : OCCUPANT_OPTIONS_COLIVING).map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
         </div>
 
@@ -306,7 +325,10 @@ export function ApplyForm({ properties }: { properties: PropertyGroup[] }) {
             name="about"
             rows={3}
             maxLength={2000}
-            placeholder="Work situation, lifestyle, why you're looking for a room..."
+            placeholder={isWholeHouse
+              ? "Family size, work situation, why you're looking for a home..."
+              : "Work situation, lifestyle, why you're looking for a room..."
+            }
             className={`${inputClass} resize-none`}
           />
         </div>
