@@ -144,6 +144,27 @@ export default async function PropertyDetailPage({
                   <span className="font-medium">Available — ask for details</span>
                 </div>
               </div>
+
+              {/* Photo Gallery */}
+              {property.photos && Array.isArray(property.photos) && property.photos.length > 1 && (
+                <>
+                  <hr className="border-card-border mb-6" />
+                  <h2 className="text-xl font-bold mb-4">Photos</h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+                    {(property.photos as string[])
+                      .filter((url) => url !== property.photo_url)
+                      .map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          <img
+                            src={url}
+                            alt={`${property.name} photo ${i + 1}`}
+                            className="w-full h-36 sm:h-44 object-cover rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
+                          />
+                        </a>
+                      ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Right column: inquiry form */}
