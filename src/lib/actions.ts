@@ -5,7 +5,7 @@ import { supabase, supabaseAdmin } from "./supabase";
 import { requireAuth } from "./auth";
 import { VALID_EMPLOYMENT, VALID_INCOME, VALID_OCCUPANTS, VALID_REFERRAL_SOURCES, VALID_CONTACT_METHODS, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
 import { getCurrentMonth } from "./utils";
-import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats } from "./types";
+import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats, TenantDocument } from "./types";
 import { sendInquiryEmail } from "./email";
 import { createOrUpdateGHLContact, sendApplicantSMS, sendOwnerNotificationSMS } from "./ghl";
 
@@ -1096,6 +1096,144 @@ export async function deleteExpense(id: number): Promise<void> {
   if (error) throw error;
   revalidatePath("/admin/expenses");
   revalidatePath("/admin");
+}
+
+// ─── Inquiry Conversion ─────────────────────────────────────────────────────
+
+export async function convertInquiryToTenant(data: {
+  inquiry_id: number;
+  room_id: number;
+  move_in_date: string;
+  initial_fee: number;
+  monthly_fee: number;
+}): Promise<number> {
+  await requireAuth();
+
+  // Fetch the inquiry to get member info
+  const inquiry = await getInquiry(data.inquiry_id);
+  if (!inquiry) throw new Error("Inquiry not found.");
+  if (inquiry.status === "converted") throw new Error("Inquiry already converted.");
+
+  // Create tenant (this also marks the room as occupied)
+  const tenant = await createTenant({
+    name: inquiry.name,
+    email: inquiry.email,
+    phone: inquiry.phone,
+    room_id: data.room_id,
+    move_in_date: data.move_in_date,
+  });
+
+  // Set agreement-specific fields on the tenant
+  await supabaseAdmin
+    .from("tenants")
+    .update({
+      inquiry_id: data.inquiry_id,
+      initial_fee: data.initial_fee,
+      monthly_fee: data.monthly_fee,
+      agreement_generated_at: new Date().toISOString(),
+    })
+    .eq("id", tenant.id);
+
+  // Mark inquiry as converted
+  await supabaseAdmin
+    .from("inquiries")
+    .update({ status: "converted" })
+    .eq("id", data.inquiry_id);
+
+  revalidatePath("/admin/inquiries");
+  revalidatePath(`/admin/inquiries/${data.inquiry_id}`);
+  revalidatePath("/admin/tenants");
+  revalidatePath("/admin");
+
+  return tenant.id;
+}
+
+export async function getTenantWithAgreementData(tenantId: number): Promise<
+  | (Tenant & { room_number: string; property_name: string; property_address: string; property_city: string })
+  | null
+> {
+  await requireAuth();
+  const { data, error } = await supabaseAdmin
+    .from("tenants")
+    .select("*, rooms(room_number, price, properties(name, address, city))")
+    .eq("id", tenantId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const { rooms: roomData, ...tenant } = data as Record<string, unknown>;
+  const r = roomData as { room_number: string; price: number; properties: { name: string; address: string; city: string } } | null;
+  return {
+    ...tenant,
+    room_number: r?.room_number ?? "",
+    property_name: r?.properties?.name ?? "",
+    property_address: r?.properties?.address
+      ? `${r.properties.address}, ${r.properties.city}`
+      : "",
+    property_city: r?.properties?.city ?? "",
+  } as Tenant & { room_number: string; property_name: string; property_address: string; property_city: string };
+}
+
+// ─── Tenant Documents ───────────────────────────────────────────────────────
+
+export async function getTenantDocuments(tenantId: number): Promise<TenantDocument[]> {
+  await requireAuth();
+  const { data, error } = await supabaseAdmin
+    .from("tenant_documents")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("uploaded_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as TenantDocument[];
+}
+
+export async function createTenantDocument(data: {
+  tenant_id: number;
+  type: string;
+  file_name: string;
+  storage_path: string;
+}): Promise<TenantDocument> {
+  await requireAuth();
+  const { data: result, error } = await supabaseAdmin
+    .from("tenant_documents")
+    .insert({
+      tenant_id: data.tenant_id,
+      type: data.type,
+      file_name: data.file_name,
+      storage_path: data.storage_path,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return result as TenantDocument;
+}
+
+export async function deleteTenantDocument(id: number): Promise<void> {
+  await requireAuth();
+  // Get document to find storage path
+  const { data: doc } = await supabaseAdmin
+    .from("tenant_documents")
+    .select("storage_path")
+    .eq("id", id)
+    .single();
+  if (doc) {
+    // Delete from storage
+    await supabaseAdmin.storage.from("tenant-documents").remove([doc.storage_path]);
+  }
+  // Delete record
+  const { error } = await supabaseAdmin.from("tenant_documents").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function getTenantByInquiryId(inquiryId: number): Promise<Tenant | null> {
+  await requireAuth();
+  const { data, error } = await supabaseAdmin
+    .from("tenants")
+    .select("*")
+    .eq("inquiry_id", inquiryId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as Tenant | null;
 }
 
 // ─── Lock Codes ──────────────────────────────────────────────────────────────

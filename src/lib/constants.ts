@@ -34,14 +34,21 @@ export const OCCUPANT_OPTIONS_WHOLEHOUSE = [
 
 export const VALID_OCCUPANTS = ["1", "2", "3", "4", "5", "6+"] as string[];
 
-export const INQUIRY_STATUSES = ["new", "reviewed", "contacted", "rejected"] as const;
+export const INQUIRY_STATUSES = ["new", "reviewed", "contacted", "rejected", "converted"] as const;
 
 export const INQUIRY_STATUS_COLORS: Record<string, string> = {
   new: "bg-blue-100 text-blue-800",
   reviewed: "bg-yellow-100 text-yellow-800",
   contacted: "bg-green-100 text-green-800",
   rejected: "bg-red-100 text-red-800",
+  converted: "bg-purple-100 text-purple-800",
 };
+
+export const DOCUMENT_TYPES = [
+  { value: "id_photo", label: "Photo ID" },
+  { value: "pay_stub", label: "Pay Stub" },
+  { value: "other", label: "Other" },
+] as const;
 
 export const VALID_EMPLOYMENT = EMPLOYMENT_OPTIONS.map((o) => o.value) as unknown as string[];
 export const VALID_INCOME = INCOME_OPTIONS.map((o) => o.value) as unknown as string[];

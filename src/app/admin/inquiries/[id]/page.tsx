@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getInquiry, updateInquiryStatus } from "@/lib/actions";
+import { getInquiry, updateInquiryStatus, getTenantByInquiryId } from "@/lib/actions";
 import { EMPLOYMENT_OPTIONS, INCOME_OPTIONS, INQUIRY_STATUS_COLORS, INQUIRY_STATUSES, REFERRAL_SOURCE_OPTIONS, CONTACT_METHOD_OPTIONS } from "@/lib/constants";
 
 const employmentLabels = Object.fromEntries(EMPLOYMENT_OPTIONS.map((o) => [o.value, o.label]));
@@ -19,6 +19,11 @@ export default async function InquiryDetailPage({
   if (!inquiry) {
     redirect("/admin/inquiries");
   }
+
+  // If converted, find the linked tenant
+  const linkedTenant = inquiry.status === "converted"
+    ? await getTenantByInquiryId(Number(id))
+    : null;
 
   async function setStatus(formData: FormData) {
     "use server";
@@ -182,6 +187,40 @@ export default async function InquiryDetailPage({
                 Update Status
               </button>
             </form>
+
+            {/* Convert to Tenant button — shown when not rejected/converted */}
+            {inquiry.status !== "rejected" && inquiry.status !== "converted" && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <Link
+                  href={`/admin/inquiries/${id}/convert`}
+                  className="block w-full rounded-lg bg-green-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-green-700 transition-colors"
+                >
+                  Convert to Tenant
+                </Link>
+                <p className="mt-2 text-xs text-gray-500 text-center">
+                  Creates tenant, assigns room, and generates membership agreement PDF
+                </p>
+              </div>
+            )}
+
+            {/* Linked tenant — shown when converted */}
+            {inquiry.status === "converted" && linkedTenant && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-xs font-medium text-purple-700 mb-2">Converted to Tenant</p>
+                <Link
+                  href={`/admin/tenants/${linkedTenant.id}/edit`}
+                  className="block w-full rounded-lg bg-purple-50 px-4 py-2 text-center text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors"
+                >
+                  View Tenant
+                </Link>
+                <a
+                  href={`/api/agreement/${linkedTenant.id}`}
+                  className="mt-2 block w-full rounded-lg bg-gray-100 px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+                >
+                  Download Agreement
+                </a>
+              </div>
+            )}
 
             <div className="mt-6 pt-4 border-t border-gray-200 text-xs text-gray-500">
               <p>Submitted: {new Date(inquiry.created_at + "Z").toLocaleString()}</p>

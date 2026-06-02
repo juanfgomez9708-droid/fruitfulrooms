@@ -37,7 +37,20 @@ export interface Tenant {
   room_id: number | null;
   move_in_date: string | null;
   status: "active" | "moved_out";
+  inquiry_id: number | null;
+  initial_fee: number | null;
+  monthly_fee: number | null;
+  agreement_generated_at: string | null;
   created_at: string;
+}
+
+export interface TenantDocument {
+  id: number;
+  tenant_id: number;
+  type: "id_photo" | "pay_stub" | "other";
+  file_name: string;
+  storage_path: string;
+  uploaded_at: string;
 }
 
 export interface Payment {
@@ -72,7 +85,7 @@ export interface Inquiry {
   job_length: string | null;
   has_vehicle: string | null;
   preferred_tour_date: string | null;
-  status: "new" | "reviewed" | "contacted" | "rejected";
+  status: "new" | "reviewed" | "contacted" | "rejected" | "converted";
   created_at: string;
 }
 

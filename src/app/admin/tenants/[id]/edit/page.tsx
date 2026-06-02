@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { getTenant, updateTenant, getVacantRooms, getAllRooms } from "@/lib/actions";
+import { getTenant, updateTenant, getVacantRooms, getAllRooms, getTenantDocuments } from "@/lib/actions";
+import TenantDocuments from "../documents/TenantDocuments";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,11 @@ export default async function EditTenantPage({
   const tenant = await getTenant(Number(id));
   if (!tenant) notFound();
 
-  const vacantRooms = await getVacantRooms();
-  const allRooms = await getAllRooms();
+  const [vacantRooms, allRooms, documents] = await Promise.all([
+    getVacantRooms(),
+    getAllRooms(),
+    getTenantDocuments(Number(id)),
+  ]);
 
   // Include currently assigned room in the dropdown even if occupied
   const currentRoom = tenant.room_id
@@ -120,6 +124,15 @@ export default async function EditTenantPage({
           Update Tenant
         </button>
       </form>
+
+      {/* Documents Section */}
+      <div className="mt-6">
+        <TenantDocuments
+          tenantId={tenant.id}
+          initialDocuments={documents}
+          hasAgreement={!!tenant.agreement_generated_at}
+        />
+      </div>
     </div>
   );
 }
