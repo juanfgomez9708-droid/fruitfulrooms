@@ -1183,7 +1183,11 @@ export async function getTenantDocuments(tenantId: number): Promise<TenantDocume
     .select("*")
     .eq("tenant_id", tenantId)
     .order("uploaded_at", { ascending: false });
-  if (error) throw error;
+  if (error) {
+    // 42P01 = table does not exist (pending Supabase migration)
+    if ((error as any).code === "42P01") return [];
+    throw error;
+  }
   return (data ?? []) as TenantDocument[];
 }
 
