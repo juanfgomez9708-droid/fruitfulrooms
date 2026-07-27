@@ -1,3 +1,5 @@
+import type { HealthCategory } from "./types";
+
 export const AUTH_COOKIE_NAME = "fr_session";
 export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -86,3 +88,103 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 
 export const VALID_EXPENSE_CATEGORIES = EXPENSE_CATEGORIES.map((c) => c.value) as unknown as string[];
+
+// ─── Property Health Tracker ──────────────────────────────────────────────────
+//
+// The health score is a deduction model: every property starts at 100 and each
+// factor below can subtract up to `weight` points. The penalty ramps from 0 up
+// to `weight` as something goes overdue, so health "drops a bit" over time.
+//
+// Weights are calibrated so INCOME (vacancy + rent) is exactly half of a
+// property's entire health — occupancy is existential — and landscaping is the
+// smallest lever. All weights across derived + scheduled factors sum to 100.
+//
+// To retune the model, edit the numbers here. No migration required.
+
+/** Scheduled upkeep tasks — completions are recorded in `maintenance_logs`. */
+export interface UpkeepTaskDef {
+  key: string;
+  label: string;
+  category: HealthCategory;
+  weight: number; // max penalty points
+  cadenceDays: number; // how often it should be done
+  graceDays: number; // days past due before the full penalty applies
+  icon: string;
+}
+
+export const UPKEEP_TASKS: UpkeepTaskDef[] = [
+  { key: "house_cleaning", label: "House / common-area cleaning", category: "cleanliness", weight: 6, cadenceDays: 30, graceDays: 15, icon: "🧹" },
+  { key: "ac_filter", label: "A/C filter replacement", category: "maintenance", weight: 5, cadenceDays: 60, graceDays: 30, icon: "❄️" },
+  { key: "lock_battery", label: "Lock battery check", category: "safety", weight: 4, cadenceDays: 90, graceDays: 30, icon: "🔋" },
+  { key: "pest_control", label: "Pest control", category: "maintenance", weight: 3, cadenceDays: 90, graceDays: 45, icon: "🐜" },
+  { key: "landscaping", label: "Landscaping / lawn", category: "cleanliness", weight: 2, cadenceDays: 30, graceDays: 15, icon: "🌿" },
+  { key: "smoke_detector", label: "Smoke / CO detector check", category: "safety", weight: 2, cadenceDays: 180, graceDays: 60, icon: "🚨" },
+];
+
+export const UPKEEP_TASK_KEYS = UPKEEP_TASKS.map((t) => t.key);
+
+/** Weights for factors derived from existing data (not logged as tasks). Sum with
+ *  UPKEEP_TASKS weights = 100. */
+export const DERIVED_WEIGHTS = {
+  vacancy: 34,
+  overdue_rent: 16,
+  open_issues: 10,
+  bill_essential: 9, // electricity + water
+  bill_mortgage: 6, // mortgage + lender payment
+  bill_internet: 3,
+} as const;
+
+/** Expense categories that count as each tracked monthly bill. */
+export const BILL_GROUPS: { key: keyof typeof DERIVED_WEIGHTS; label: string; categories: string[] }[] = [
+  { key: "bill_essential", label: "Essential utilities (electric + water)", categories: ["electricity", "water"] },
+  { key: "bill_mortgage", label: "Mortgage / lender payment", categories: ["mortgage", "lender_payment"] },
+  { key: "bill_internet", label: "Internet", categories: ["internet"] },
+];
+
+/** Health tuning knobs. */
+export const HEALTH_CONFIG = {
+  // Score → band thresholds.
+  greenMin: 85,
+  yellowMin: 65,
+  // Vacancy aging: a room hits full vacancy severity after this many days empty.
+  vacancyFullDays: 30,
+  // Even a freshly vacant room registers this much severity (lost income now).
+  vacancyFloor: 0.3,
+  // Rent grace: no overdue-rent penalty until after this day of the month.
+  rentGraceDay: 5,
+  // Bills are considered due after this day of the month.
+  billDueDay: 10,
+  // A scheduled task with no log ever recorded applies this share of its weight
+  // (labelled "not yet logged" — nudges you to seed the first completion).
+  neverLoggedRatio: 0.6,
+  // ── Critical caps ──
+  // Vacancy this severe forces the property red regardless of everything else.
+  redCapVacancyRate: 0.5,
+  redCapVacantDays: 45,
+  // Essential utility unpaid this far into the month = cutoff risk → cap at yellow.
+  utilityCutoffDay: 24,
+} as const;
+
+export const ISSUE_PRIORITIES = [
+  { value: "low", label: "Low", severity: 0.15 },
+  { value: "medium", label: "Medium", severity: 0.4 },
+  { value: "high", label: "High", severity: 0.7 },
+  { value: "urgent", label: "Urgent", severity: 1.0 },
+] as const;
+
+export const VALID_ISSUE_PRIORITIES = ISSUE_PRIORITIES.map((p) => p.value) as unknown as string[];
+export const VALID_ISSUE_STATUSES = ["open", "in_progress", "resolved"] as unknown as string[];
+
+export const HEALTH_CATEGORY_LABELS: Record<HealthCategory, string> = {
+  income: "Income",
+  bills: "Bills",
+  maintenance: "Maintenance",
+  safety: "Safety",
+  cleanliness: "Cleanliness",
+};
+
+export const HEALTH_BAND_META = {
+  green: { label: "Healthy", color: "#16a34a", bg: "#dcfce7", text: "#166534", dot: "🟢" },
+  yellow: { label: "Needs attention", color: "#ca8a04", bg: "#fef9c3", text: "#854d0e", dot: "🟡" },
+  red: { label: "Needs work now", color: "#dc2626", bg: "#fee2e2", text: "#991b1b", dot: "🔴" },
+} as const;
