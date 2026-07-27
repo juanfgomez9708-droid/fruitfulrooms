@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { getTenant, updateTenant, getVacantRooms, getAllRooms, getTenantDocuments } from "@/lib/actions";
+import { getTenant, updateTenant, getVacantRooms, getAllRooms, getProperties, getTenantDocuments } from "@/lib/actions";
 import TenantDocuments from "../documents/TenantDocuments";
 
 export const dynamic = "force-dynamic";
@@ -14,9 +14,10 @@ export default async function EditTenantPage({
   const tenant = await getTenant(Number(id));
   if (!tenant) notFound();
 
-  const [vacantRooms, allRooms, documents] = await Promise.all([
+  const [vacantRooms, allRooms, properties, documents] = await Promise.all([
     getVacantRooms(),
     getAllRooms(),
+    getProperties(),
     getTenantDocuments(Number(id)),
   ]);
 
@@ -25,14 +26,28 @@ export default async function EditTenantPage({
     ? allRooms.find((r) => r.id === tenant.room_id)
     : null;
 
+  // Whole-house options: any available whole-house + this tenant's current one.
+  const wholeHouses = properties.filter(
+    (p) => p.rental_type === "whole-house" && (p.status !== "rented" || p.id === tenant.property_id)
+  );
+
+  const currentAssignment = tenant.room_id
+    ? `room:${tenant.room_id}`
+    : tenant.property_id
+      ? `property:${tenant.property_id}`
+      : "";
+
   async function handleUpdate(formData: FormData) {
     "use server";
-    const roomId = formData.get("room_id") as string;
+    const assignment = (formData.get("assignment") as string) || "";
+    const [kind, rawId] = assignment.split(":");
+    const assignedId = rawId ? Number(rawId) : null;
     await updateTenant(Number(id), {
       name: formData.get("name") as string,
       email: (formData.get("email") as string) || undefined,
       phone: (formData.get("phone") as string) || undefined,
-      room_id: roomId ? Number(roomId) : null,
+      room_id: kind === "room" ? assignedId : null,
+      property_id: kind === "property" ? assignedId : null,
       move_in_date: (formData.get("move_in_date") as string) || undefined,
       status: formData.get("status") as string,
     });
@@ -78,23 +93,35 @@ export default async function EditTenantPage({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Room Assignment</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Assignment</label>
           <select
-            name="room_id"
-            defaultValue={tenant.room_id ?? ""}
+            name="assignment"
+            defaultValue={currentAssignment}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
           >
-            <option value="">No room assigned</option>
+            <option value="">No assignment</option>
             {currentRoom && (
-              <option value={currentRoom.id}>
+              <option value={`room:${currentRoom.id}`}>
                 {currentRoom.property_name} - Room {currentRoom.room_number} (current)
               </option>
             )}
-            {vacantRooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.property_name} - Room {r.room_number} (${r.price}/mo)
-              </option>
-            ))}
+            <optgroup label="Rooms (co-living)">
+              {vacantRooms.map((r) => (
+                <option key={`room-${r.id}`} value={`room:${r.id}`}>
+                  {r.property_name} - Room {r.room_number} (${r.price}/mo)
+                </option>
+              ))}
+            </optgroup>
+            {wholeHouses.length > 0 && (
+              <optgroup label="Whole-house rentals">
+                {wholeHouses.map((p) => (
+                  <option key={`prop-${p.id}`} value={`property:${p.id}`}>
+                    {p.name} — Whole House
+                    {p.id === tenant.property_id ? " (current)" : ""}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
         <div>

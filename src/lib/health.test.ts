@@ -249,6 +249,42 @@ describe("computePropertyHealth", () => {
     expect(h.band).toBe("green");
   });
 
+  test("whole-house tracks only mortgage + internet bills, still summing to 100", () => {
+    const h = computePropertyHealth(
+      baseSnapshot({
+        property: makeProperty({ rental_type: "whole-house", status: "rented" }),
+        rooms: [],
+        activeTenants: 1,
+        unpaidTenants: 0,
+      })
+    );
+    // Utilities and lender don't apply to a single-family whole-house.
+    expect(h.factors.find((f) => f.key === "bill_essential")).toBeUndefined();
+    expect(h.factors.find((f) => f.key === "bill_mortgage")!.weight).toBe(12);
+    expect(h.factors.find((f) => f.key === "bill_internet")!.weight).toBe(6);
+    expect(h.factors.reduce((s, f) => s + f.weight, 0)).toBe(100);
+    // Rented single tenant = 100% occupancy, all bills paid → perfect.
+    expect(h.score).toBe(100);
+    expect(h.band).toBe("green");
+  });
+
+  test("whole-house with an unpaid mortgage loses points but no utility cap", () => {
+    const paid = new Set(["internet"]); // mortgage missing
+    const h = computePropertyHealth(
+      baseSnapshot({
+        property: makeProperty({ rental_type: "whole-house", status: "rented" }),
+        rooms: [],
+        activeTenants: 1,
+        paidBillCategories: paid,
+        now: new Date("2026-07-25T12:00:00Z"),
+      })
+    );
+    const mortgage = h.factors.find((f) => f.key === "bill_mortgage")!;
+    expect(mortgage.penalty).toBeGreaterThan(0);
+    // No essential-utility cutoff cap applies (whole-house has no essential bill).
+    expect(h.cappedBy).toBeNull();
+  });
+
   test("all factor weights sum to 100", () => {
     const h = computePropertyHealth(baseSnapshot());
     const total = h.factors.reduce((s, f) => s + f.weight, 0);

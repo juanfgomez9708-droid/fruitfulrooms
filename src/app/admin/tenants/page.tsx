@@ -1,11 +1,15 @@
 import Link from "next/link";
-import { getTenants, deleteTenant, getAllRooms } from "@/lib/actions";
+import { getTenants, deleteTenant, getAllRooms, getProperties } from "@/lib/actions";
+import type { Tenant } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function TenantsPage() {
-  const tenants = await getTenants();
-  const rooms = await getAllRooms();
+  const [tenants, rooms, properties] = await Promise.all([
+    getTenants(),
+    getAllRooms(),
+    getProperties(),
+  ]);
 
   // Build a map: room_id → { property_name, room_number, property_id }
   const roomInfoMap = new Map(
@@ -18,6 +22,20 @@ export default async function TenantsPage() {
       },
     ])
   );
+  const propertyNameMap = new Map(properties.map((p) => [p.id, p.name]));
+
+  // Resolve a tenant's assignment via their room (co-living) or property (whole-house).
+  const assignmentInfo = (t: Tenant) => {
+    if (t.room_id) return roomInfoMap.get(t.room_id) ?? null;
+    if (t.property_id) {
+      return {
+        property_name: propertyNameMap.get(t.property_id) ?? "Unknown",
+        room_number: "Whole House",
+        property_id: t.property_id,
+      };
+    }
+    return null;
+  };
 
   // Split active vs archived
   const activeTenants = tenants.filter((t) => t.status === "active");
@@ -28,7 +46,7 @@ export default async function TenantsPage() {
   const unassigned: typeof activeTenants = [];
 
   for (const t of activeTenants) {
-    const info = t.room_id ? roomInfoMap.get(t.room_id) : null;
+    const info = assignmentInfo(t);
     if (info) {
       const key = info.property_name;
       if (!grouped.has(key)) grouped.set(key, []);
@@ -41,8 +59,8 @@ export default async function TenantsPage() {
   // Sort tenants within each property group by room number (numeric)
   for (const [, group] of grouped) {
     group.sort((a, b) => {
-      const aNum = parseInt(roomInfoMap.get(a.room_id!)?.room_number ?? "0", 10);
-      const bNum = parseInt(roomInfoMap.get(b.room_id!)?.room_number ?? "0", 10);
+      const aNum = parseInt(assignmentInfo(a)?.room_number ?? "0", 10) || 0;
+      const bNum = parseInt(assignmentInfo(b)?.room_number ?? "0", 10) || 0;
       return aNum - bNum;
     });
   }
@@ -53,14 +71,14 @@ export default async function TenantsPage() {
   );
 
   const renderTenantRow = (tenant: (typeof tenants)[0], i: number) => {
-    const info = tenant.room_id ? roomInfoMap.get(tenant.room_id) : null;
+    const info = assignmentInfo(tenant);
     return (
       <tr key={tenant.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
         <td className="py-2 font-medium text-gray-900">{tenant.name}</td>
         <td className="py-2 text-gray-600">{tenant.email ?? "-"}</td>
         <td className="py-2 text-gray-600">{tenant.phone ?? "-"}</td>
         <td className="py-2 text-gray-600">
-          {info ? `Room ${info.room_number}` : "Unassigned"}
+          {!info ? "Unassigned" : info.room_number === "Whole House" ? "Whole House" : `Room ${info.room_number}`}
         </td>
         <td className="py-2 text-gray-600">{tenant.move_in_date ?? "-"}</td>
         <td className="py-2">

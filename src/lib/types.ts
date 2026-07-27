@@ -36,6 +36,7 @@ export interface Tenant {
   email: string | null;
   phone: string | null;
   room_id: number | null;
+  property_id: number | null; // set instead of room_id for whole-house rentals
   move_in_date: string | null;
   status: "active" | "moved_out";
   inquiry_id: number | null;
