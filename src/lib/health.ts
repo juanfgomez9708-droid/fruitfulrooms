@@ -265,7 +265,12 @@ function buildVacancyFactor(snapshot: HealthSnapshot): {
   let totalUnits = 0;
   let detail: string;
 
-  if (rooms.length > 0) {
+  // Whole-house properties track occupancy via the property status field, not
+  // per-room; co-living uses its rooms. (Fall back to status if a co-living
+  // property somehow has no rooms yet.)
+  const useRooms = property.rental_type !== "whole-house" && rooms.length > 0;
+
+  if (useRooms) {
     totalUnits = rooms.length;
     let sevSum = 0;
     for (const r of rooms) {
