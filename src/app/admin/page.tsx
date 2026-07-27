@@ -1,5 +1,7 @@
-import { getDashboardStats, getPayments, getExpenses, getTenants, getTenantsWithRooms, getProperties } from "@/lib/actions";
+import { getDashboardStats, getPayments, getExpenses, getTenants, getTenantsWithRooms, getProperties, getPortfolioHealth } from "@/lib/actions";
 import { getCurrentMonth, TIME_PERIODS, getDateRange, type TimePeriod } from "@/lib/utils";
+import { HEALTH_BAND_META } from "@/lib/constants";
+import type { PropertyHealth } from "@/lib/types";
 import { DashboardFilters } from "./DashboardFilters";
 import Link from "next/link";
 
@@ -19,6 +21,12 @@ export default async function DashboardPage({
 
   // Static stats from RPC (properties, rooms, tenants, occupancy — don't change with time)
   const stats = await getDashboardStats(selectedProperty);
+
+  // Property health (all properties; filtered for display if a property is selected)
+  const portfolioHealth = await getPortfolioHealth();
+  const healthToShow = selectedProperty
+    ? portfolioHealth.properties.filter((h) => h.propertyId === selectedProperty)
+    : [...portfolioHealth.properties].sort((a, b) => a.score - b.score);
 
   // Financial stats from date-range queries
   const range = getDateRange(selectedPeriod, selectedMonth);
@@ -97,6 +105,25 @@ export default async function DashboardPage({
           icon="📈"
         />
       </div>
+
+      {/* Property Health */}
+      {healthToShow.length > 0 && (
+        <div className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+              <span>🩺</span> Property Health
+            </h2>
+            <Link href="/admin/health" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+              View all →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {healthToShow.map((h) => (
+              <HealthMiniCard key={h.propertyId} health={h} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Overdue Rent Alert */}
       {isAfterGracePeriod && overdueTenantsData.length > 0 && (
@@ -225,6 +252,42 @@ export default async function DashboardPage({
         )}
       </div>
     </div>
+  );
+}
+
+function HealthMiniCard({ health }: { health: PropertyHealth }) {
+  const band = HEALTH_BAND_META[health.band];
+  const topConcern = [...health.factors]
+    .filter((f) => f.penalty > 0.5)
+    .sort((a, b) => b.penalty - a.penalty)[0];
+  return (
+    <Link
+      href="/admin/health"
+      className="card card-hover block"
+      style={{ borderLeft: `5px solid ${band.color}` }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-gray-900">{health.propertyName}</p>
+          <p className="text-xs font-medium" style={{ color: band.text }}>
+            {band.dot} {band.label}
+          </p>
+        </div>
+        <div
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+          style={{ background: band.bg, color: band.text }}
+        >
+          {health.score}
+        </div>
+      </div>
+      <p className="mt-2 truncate text-xs text-gray-500">
+        {health.cappedBy
+          ? `⚠️ ${health.cappedBy}`
+          : topConcern
+            ? `${topConcern.label} — ${topConcern.detail}`
+            : "All healthy"}
+      </p>
+    </Link>
   );
 }
 

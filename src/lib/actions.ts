@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { supabase, supabaseAdmin } from "./supabase";
 import { requireAuth } from "./auth";
-import { VALID_EMPLOYMENT, VALID_INCOME, VALID_OCCUPANTS, VALID_REFERRAL_SOURCES, VALID_CONTACT_METHODS, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES } from "./constants";
+import { VALID_EMPLOYMENT, VALID_INCOME, VALID_OCCUPANTS, VALID_REFERRAL_SOURCES, VALID_CONTACT_METHODS, INQUIRY_STATUSES, VALID_EXPENSE_CATEGORIES, UPKEEP_TASK_KEYS, VALID_ISSUE_PRIORITIES, VALID_ISSUE_STATUSES } from "./constants";
 import { getCurrentMonth } from "./utils";
-import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats, TenantDocument } from "./types";
+import type { Property, Room, Tenant, Payment, Inquiry, Expense, LockCode, DashboardStats, TenantDocument, MaintenanceLog, MaintenanceIssue, PortfolioHealth } from "./types";
+import { computePropertyHealth, type HealthSnapshot } from "./health";
 import { sendInquiryEmail } from "./email";
 import { createOrUpdateGHLContact, sendApplicantSMS, sendOwnerNotificationSMS } from "./ghl";
 
@@ -186,16 +187,18 @@ export async function createRoom(data: {
     }
   }
 
+  const roomStatus = data.status ?? "vacant";
   const { data: result, error } = await supabaseAdmin
     .from("rooms")
     .insert({
       property_id: data.property_id,
       room_number: data.room_number,
       price: data.price,
-      status: data.status ?? "vacant",
+      status: roomStatus,
       amenities,
       photo_url: data.photo_url ?? null,
       description: data.description ?? null,
+      vacant_since: roomStatus === "vacant" ? new Date().toISOString() : null,
     })
     .select()
     .single();
@@ -232,15 +235,25 @@ export async function updateRoom(
     }
   }
 
+  const nextStatus = data.status ?? existing.status;
+  // Keep vacant_since in sync when a manual status change flips vacancy.
+  let vacantSince = existing.vacant_since;
+  if (nextStatus === "vacant" && existing.status !== "vacant") {
+    vacantSince = new Date().toISOString();
+  } else if (nextStatus !== "vacant") {
+    vacantSince = null;
+  }
+
   const { data: result, error } = await supabaseAdmin
     .from("rooms")
     .update({
       room_number: data.room_number ?? existing.room_number,
       price: data.price ?? existing.price,
-      status: data.status ?? existing.status,
+      status: nextStatus,
       amenities,
       photo_url: data.photo_url ?? existing.photo_url,
       description: data.description ?? existing.description,
+      vacant_since: vacantSince,
     })
     .eq("id", id)
     .select()
@@ -416,7 +429,7 @@ export async function createTenant(data: {
   if (data.room_id) {
     await supabaseAdmin
       .from("rooms")
-      .update({ status: "occupied" })
+      .update({ status: "occupied", vacant_since: null })
       .eq("id", data.room_id);
     revalidatePath("/listings");
   }
@@ -444,11 +457,13 @@ export async function updateTenant(
   const newStatus = data.status ?? existing.status;
   let newRoomId = data.room_id !== undefined ? data.room_id : existing.room_id;
 
+  const nowIso = new Date().toISOString();
+
   // If tenant is being moved out, free their room and clear assignment
   if (newStatus === "moved_out" && existing.status !== "moved_out" && newRoomId) {
     await supabaseAdmin
       .from("rooms")
-      .update({ status: "vacant" })
+      .update({ status: "vacant", vacant_since: nowIso })
       .eq("id", newRoomId);
     newRoomId = null;
     revalidatePath("/listings");
@@ -457,13 +472,13 @@ export async function updateTenant(
     if (existing.room_id) {
       await supabaseAdmin
         .from("rooms")
-        .update({ status: "vacant" })
+        .update({ status: "vacant", vacant_since: nowIso })
         .eq("id", existing.room_id);
     }
     if (newRoomId) {
       await supabaseAdmin
         .from("rooms")
-        .update({ status: "occupied" })
+        .update({ status: "occupied", vacant_since: null })
         .eq("id", newRoomId);
     }
     revalidatePath("/listings");
@@ -497,7 +512,7 @@ export async function deleteTenant(id: number): Promise<void> {
   if (tenant?.room_id) {
     await supabaseAdmin
       .from("rooms")
-      .update({ status: "vacant" })
+      .update({ status: "vacant", vacant_since: new Date().toISOString() })
       .eq("id", tenant.room_id);
     revalidatePath("/listings");
   }
@@ -1354,4 +1369,256 @@ export async function getDashboardStats(propertyId?: number): Promise<DashboardS
     totalExpenses: stats.totalExpenses ?? 0,
     netIncome: stats.netIncome ?? 0,
   };
+}
+
+// ─── Property Health ─────────────────────────────────────────────────────────
+
+/** True if a Postgres error means the table hasn't been created yet. */
+function isMissingTable(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === "42P01";
+}
+
+/** Most recent completion timestamp per (property_id, task_type). */
+async function getLatestLogsByProperty(): Promise<Record<number, Record<string, string>>> {
+  const { data, error } = await supabaseAdmin
+    .from("maintenance_logs")
+    .select("property_id, task_type, completed_at")
+    .order("completed_at", { ascending: false });
+  if (error) {
+    if (isMissingTable(error)) return {};
+    throw error;
+  }
+  const map: Record<number, Record<string, string>> = {};
+  for (const row of (data ?? []) as { property_id: number; task_type: string; completed_at: string }[]) {
+    const forProp = (map[row.property_id] ??= {});
+    // Rows are newest-first, so the first one we see per task is the latest.
+    if (!forProp[row.task_type]) forProp[row.task_type] = row.completed_at;
+  }
+  return map;
+}
+
+/** Non-resolved issues grouped by property_id. */
+async function getOpenIssuesByProperty(): Promise<Record<number, MaintenanceIssue[]>> {
+  const { data, error } = await supabaseAdmin
+    .from("maintenance_issues")
+    .select("*")
+    .neq("status", "resolved");
+  if (error) {
+    if (isMissingTable(error)) return {};
+    throw error;
+  }
+  const map: Record<number, MaintenanceIssue[]> = {};
+  for (const issue of (data ?? []) as MaintenanceIssue[]) {
+    (map[issue.property_id] ??= []).push(issue);
+  }
+  return map;
+}
+
+/** Computes health for every property. Tolerates a not-yet-migrated database. */
+export async function getPortfolioHealth(): Promise<PortfolioHealth> {
+  await requireAuth();
+  const now = new Date();
+  const currentMonth = getCurrentMonth();
+
+  const [propsRes, roomsRes, tenantsRes, paymentsRes, expensesRes] = await Promise.all([
+    supabaseAdmin.from("properties").select("*").order("name"),
+    supabaseAdmin.from("rooms").select("*"),
+    supabaseAdmin
+      .from("tenants")
+      .select("id, room_id, rooms(property_id)")
+      .eq("status", "active")
+      .not("room_id", "is", null),
+    supabaseAdmin
+      .from("payments")
+      .select("tenant_id, status")
+      .gte("due_date", `${currentMonth}-01`)
+      .lt("due_date", nextMonthStart(currentMonth)),
+    supabaseAdmin.from("expenses").select("property_id, category").eq("month", currentMonth),
+  ]);
+
+  if (propsRes.error) throw propsRes.error;
+  const properties = (propsRes.data ?? []) as Property[];
+  const rooms = (roomsRes.data ?? []) as Room[];
+
+  // Which tenants have paid this month.
+  const paidTenantIds = new Set(
+    ((paymentsRes.data ?? []) as { tenant_id: number; status: string }[])
+      .filter((p) => p.status === "paid")
+      .map((p) => p.tenant_id)
+  );
+
+  // Active tenant → property, and unpaid counts per property.
+  const activeByProp: Record<number, number> = {};
+  const unpaidByProp: Record<number, number> = {};
+  for (const row of (tenantsRes.data ?? []) as unknown as { id: number; rooms: { property_id: number } | null }[]) {
+    const pid = row.rooms?.property_id;
+    if (!pid) continue;
+    activeByProp[pid] = (activeByProp[pid] ?? 0) + 1;
+    if (!paidTenantIds.has(row.id)) unpaidByProp[pid] = (unpaidByProp[pid] ?? 0) + 1;
+  }
+
+  // Paid bill categories per property this month.
+  const paidBillsByProp: Record<number, Set<string>> = {};
+  for (const row of (expensesRes.data ?? []) as { property_id: number; category: string }[]) {
+    (paidBillsByProp[row.property_id] ??= new Set()).add(row.category);
+  }
+
+  const latestLogsByProp = await getLatestLogsByProperty();
+  const openIssuesByProp = await getOpenIssuesByProperty();
+
+  const healths = properties.map((property) => {
+    const snapshot: HealthSnapshot = {
+      property,
+      rooms: rooms.filter((r) => r.property_id === property.id),
+      activeTenants: activeByProp[property.id] ?? 0,
+      unpaidTenants: unpaidByProp[property.id] ?? 0,
+      paidBillCategories: paidBillsByProp[property.id] ?? new Set(),
+      latestLogs: latestLogsByProp[property.id] ?? {},
+      openIssues: openIssuesByProp[property.id] ?? [],
+      now,
+    };
+    return computePropertyHealth(snapshot);
+  });
+
+  const green = healths.filter((h) => h.band === "green").length;
+  const yellow = healths.filter((h) => h.band === "yellow").length;
+  const red = healths.filter((h) => h.band === "red").length;
+  const averageScore =
+    healths.length > 0 ? Math.round(healths.reduce((s, h) => s + h.score, 0) / healths.length) : 100;
+
+  return { properties: healths, green, yellow, red, averageScore };
+}
+
+/** Record that a scheduled upkeep task was completed. */
+export async function logMaintenanceTask(data: {
+  property_id: number;
+  task_type: string;
+  room_id?: number | null;
+  completed_at?: string;
+  cost?: number | null;
+  notes?: string | null;
+}): Promise<MaintenanceLog> {
+  await requireAuth();
+  if (!UPKEEP_TASK_KEYS.includes(data.task_type)) {
+    throw new Error("Invalid task type.");
+  }
+  const { data: result, error } = await supabaseAdmin
+    .from("maintenance_logs")
+    .insert({
+      property_id: data.property_id,
+      room_id: data.room_id ?? null,
+      task_type: data.task_type,
+      completed_at: data.completed_at ?? new Date().toISOString(),
+      cost: data.cost ?? null,
+      notes: data.notes ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  revalidatePath("/admin/health");
+  revalidatePath("/admin");
+  return result as MaintenanceLog;
+}
+
+export async function getMaintenanceLogs(
+  propertyId?: number,
+  limit = 100
+): Promise<MaintenanceLog[]> {
+  await requireAuth();
+  let query = supabaseAdmin.from("maintenance_logs").select("*");
+  if (propertyId) query = query.eq("property_id", propertyId);
+  const { data, error } = await query.order("completed_at", { ascending: false }).limit(limit);
+  if (error) {
+    if (isMissingTable(error)) return [];
+    throw error;
+  }
+  return (data ?? []) as MaintenanceLog[];
+}
+
+export async function getMaintenanceIssues(
+  propertyId?: number,
+  includeResolved = false
+): Promise<(MaintenanceIssue & { property_name: string; room_number: string | null })[]> {
+  await requireAuth();
+  let query = supabaseAdmin
+    .from("maintenance_issues")
+    .select("*, properties(name), rooms(room_number)");
+  if (propertyId) query = query.eq("property_id", propertyId);
+  if (!includeResolved) query = query.neq("status", "resolved");
+  const { data, error } = await query.order("reported_at", { ascending: false });
+  if (error) {
+    if (isMissingTable(error)) return [];
+    throw error;
+  }
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const { properties: prop, rooms: room, ...issue } = row;
+    return {
+      ...issue,
+      property_name: (prop as { name: string } | null)?.name ?? "",
+      room_number: (room as { room_number: string } | null)?.room_number ?? null,
+    };
+  }) as (MaintenanceIssue & { property_name: string; room_number: string | null })[];
+}
+
+export async function createMaintenanceIssue(data: {
+  property_id: number;
+  room_id?: number | null;
+  title: string;
+  description?: string | null;
+  priority: string;
+}): Promise<MaintenanceIssue> {
+  await requireAuth();
+  const title = data.title?.trim();
+  if (!title) throw new Error("Title is required.");
+  if (!VALID_ISSUE_PRIORITIES.includes(data.priority)) {
+    throw new Error("Invalid priority.");
+  }
+  const { data: result, error } = await supabaseAdmin
+    .from("maintenance_issues")
+    .insert({
+      property_id: data.property_id,
+      room_id: data.room_id ?? null,
+      title,
+      description: data.description?.trim() || null,
+      priority: data.priority,
+      status: "open",
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  revalidatePath("/admin/health");
+  revalidatePath("/admin");
+  return result as MaintenanceIssue;
+}
+
+export async function updateMaintenanceIssueStatus(
+  id: number,
+  status: string,
+  cost?: number | null
+): Promise<MaintenanceIssue | null> {
+  await requireAuth();
+  if (!VALID_ISSUE_STATUSES.includes(status)) throw new Error("Invalid status.");
+  const updates: Record<string, unknown> = {
+    status,
+    resolved_at: status === "resolved" ? new Date().toISOString() : null,
+  };
+  if (cost !== undefined) updates.cost = cost;
+  const { data: result, error } = await supabaseAdmin
+    .from("maintenance_issues")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  revalidatePath("/admin/health");
+  revalidatePath("/admin");
+  return result as MaintenanceIssue;
+}
+
+export async function deleteMaintenanceIssue(id: number): Promise<void> {
+  await requireAuth();
+  const { error } = await supabaseAdmin.from("maintenance_issues").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/admin/health");
+  revalidatePath("/admin");
 }

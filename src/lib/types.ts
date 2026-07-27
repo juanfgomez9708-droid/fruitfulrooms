@@ -26,6 +26,7 @@ export interface Room {
   photo_url: string | null;
   photos: string | null; // JSON string of photo paths array from Supabase (text column, not JSONB)
   description: string | null;
+  vacant_since: string | null; // ISO timestamp a room became vacant; powers vacancy aging
   created_at: string;
 }
 
@@ -106,6 +107,66 @@ export interface LockCode {
   label: string;
   tenant_id: number | null;
   created_at: string;
+}
+
+export interface MaintenanceLog {
+  id: number;
+  property_id: number;
+  room_id: number | null;
+  task_type: string;
+  completed_at: string;
+  cost: number | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface MaintenanceIssue {
+  id: number;
+  property_id: number;
+  room_id: number | null;
+  title: string;
+  description: string | null;
+  priority: "low" | "medium" | "high" | "urgent";
+  status: "open" | "in_progress" | "resolved";
+  reported_at: string;
+  resolved_at: string | null;
+  cost: number | null;
+  created_at: string;
+}
+
+// ─── Property Health ──────────────────────────────────────────────────────────
+
+export type HealthCategory = "income" | "bills" | "maintenance" | "safety" | "cleanliness";
+export type HealthBand = "green" | "yellow" | "red";
+export type FactorStatus = "good" | "due_soon" | "overdue" | "critical" | "unknown";
+
+export interface HealthFactor {
+  key: string;
+  label: string;
+  category: HealthCategory;
+  weight: number; // maximum points this factor can subtract
+  penalty: number; // points subtracted right now (0..weight)
+  status: FactorStatus;
+  detail: string; // human-readable explanation of the current state
+  lastDone: string | null; // ISO date of last completion, when applicable
+  dueDate: string | null; // ISO date this is next due, when applicable
+}
+
+export interface PropertyHealth {
+  propertyId: number;
+  propertyName: string;
+  score: number; // 0..100
+  band: HealthBand;
+  cappedBy: string | null; // reason a critical cap was applied, if any
+  factors: HealthFactor[];
+}
+
+export interface PortfolioHealth {
+  properties: PropertyHealth[];
+  green: number;
+  yellow: number;
+  red: number;
+  averageScore: number;
 }
 
 export interface DashboardStats {
