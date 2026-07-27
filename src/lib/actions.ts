@@ -1199,8 +1199,9 @@ export async function getTenantDocuments(tenantId: number): Promise<TenantDocume
     .eq("tenant_id", tenantId)
     .order("uploaded_at", { ascending: false });
   if (error) {
-    // 42P01 = table does not exist (pending Supabase migration)
-    if ((error as any).code === "42P01") return [];
+    // Table not created yet (pending Supabase migration) — degrade gracefully
+    // so the tenant edit page still loads. Supabase returns PGRST205 here.
+    if (isMissingTable(error)) return [];
     throw error;
   }
   return (data ?? []) as TenantDocument[];
@@ -1373,9 +1374,12 @@ export async function getDashboardStats(propertyId?: number): Promise<DashboardS
 
 // ─── Property Health ─────────────────────────────────────────────────────────
 
-/** True if a Postgres error means the table hasn't been created yet. */
+/** True if an error means the table hasn't been created yet.
+ *  Supabase/PostgREST returns "PGRST205" (table not in schema cache) via the
+ *  REST API; "42P01" is the raw Postgres code (e.g. from rpc/SQL paths). Cover both. */
 function isMissingTable(error: unknown): boolean {
-  return (error as { code?: string } | null)?.code === "42P01";
+  const code = (error as { code?: string } | null)?.code;
+  return code === "PGRST205" || code === "42P01";
 }
 
 /** Most recent completion timestamp per (property_id, task_type). */
