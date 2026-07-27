@@ -406,7 +406,8 @@ export async function createTenant(data: {
   name: string;
   email?: string;
   phone?: string;
-  room_id?: number;
+  room_id?: number | null;
+  property_id?: number | null; // whole-house assignment (mutually exclusive with room_id)
   move_in_date?: string;
   status?: string;
 }): Promise<Tenant> {
@@ -418,6 +419,7 @@ export async function createTenant(data: {
       email: data.email ?? null,
       phone: data.phone ?? null,
       room_id: data.room_id ?? null,
+      property_id: data.property_id ?? null,
       move_in_date: data.move_in_date ?? null,
       status: data.status ?? "active",
     })
@@ -434,6 +436,16 @@ export async function createTenant(data: {
     revalidatePath("/listings");
   }
 
+  // Whole-house assignment marks the property rented (= 100% occupied).
+  if (data.property_id) {
+    await supabaseAdmin
+      .from("properties")
+      .update({ status: "rented" })
+      .eq("id", data.property_id);
+    revalidatePath("/listings");
+    revalidatePath("/admin/properties");
+  }
+
   revalidatePath("/admin/tenants");
   revalidatePath("/admin");
   return result as Tenant;
@@ -446,6 +458,7 @@ export async function updateTenant(
     email?: string;
     phone?: string;
     room_id?: number | null;
+    property_id?: number | null;
     move_in_date?: string;
     status?: string;
   }
@@ -455,34 +468,53 @@ export async function updateTenant(
   if (!existing) return null;
 
   const newStatus = data.status ?? existing.status;
-  let newRoomId = data.room_id !== undefined ? data.room_id : existing.room_id;
-
   const nowIso = new Date().toISOString();
 
-  // If tenant is being moved out, free their room and clear assignment
-  if (newStatus === "moved_out" && existing.status !== "moved_out" && newRoomId) {
+  // Resolve target assignment. Moving out clears everything.
+  let targetRoomId = data.room_id !== undefined ? data.room_id : existing.room_id;
+  let targetPropertyId = data.property_id !== undefined ? data.property_id : existing.property_id;
+  if (newStatus === "moved_out") {
+    targetRoomId = null;
+    targetPropertyId = null;
+  }
+
+  let listingsChanged = false;
+  let propertiesChanged = false;
+
+  // ── Room (co-living) transitions ──
+  if (existing.room_id && existing.room_id !== targetRoomId) {
     await supabaseAdmin
       .from("rooms")
       .update({ status: "vacant", vacant_since: nowIso })
-      .eq("id", newRoomId);
-    newRoomId = null;
-    revalidatePath("/listings");
-  } else if (existing.room_id !== newRoomId) {
-    // Room assignment changed — update room statuses
-    if (existing.room_id) {
-      await supabaseAdmin
-        .from("rooms")
-        .update({ status: "vacant", vacant_since: nowIso })
-        .eq("id", existing.room_id);
-    }
-    if (newRoomId) {
-      await supabaseAdmin
-        .from("rooms")
-        .update({ status: "occupied", vacant_since: null })
-        .eq("id", newRoomId);
-    }
-    revalidatePath("/listings");
+      .eq("id", existing.room_id);
+    listingsChanged = true;
   }
+  if (targetRoomId && targetRoomId !== existing.room_id) {
+    await supabaseAdmin
+      .from("rooms")
+      .update({ status: "occupied", vacant_since: null })
+      .eq("id", targetRoomId);
+    listingsChanged = true;
+  }
+
+  // ── Whole-house transitions (keep property status in sync with occupancy) ──
+  if (existing.property_id && existing.property_id !== targetPropertyId) {
+    await supabaseAdmin
+      .from("properties")
+      .update({ status: "available" })
+      .eq("id", existing.property_id);
+    propertiesChanged = true;
+  }
+  if (targetPropertyId && targetPropertyId !== existing.property_id) {
+    await supabaseAdmin
+      .from("properties")
+      .update({ status: "rented" })
+      .eq("id", targetPropertyId);
+    propertiesChanged = true;
+  }
+
+  if (listingsChanged || propertiesChanged) revalidatePath("/listings");
+  if (propertiesChanged) revalidatePath("/admin/properties");
 
   const { data: result, error } = await supabaseAdmin
     .from("tenants")
@@ -490,7 +522,8 @@ export async function updateTenant(
       name: data.name ?? existing.name,
       email: data.email ?? existing.email,
       phone: data.phone ?? existing.phone,
-      room_id: newRoomId,
+      room_id: targetRoomId,
+      property_id: targetPropertyId,
       move_in_date: data.move_in_date ?? existing.move_in_date,
       status: newStatus,
     })
@@ -515,6 +548,16 @@ export async function deleteTenant(id: number): Promise<void> {
       .update({ status: "vacant", vacant_since: new Date().toISOString() })
       .eq("id", tenant.room_id);
     revalidatePath("/listings");
+  }
+
+  // Free the whole-house property if assigned
+  if (tenant?.property_id) {
+    await supabaseAdmin
+      .from("properties")
+      .update({ status: "available" })
+      .eq("id", tenant.property_id);
+    revalidatePath("/listings");
+    revalidatePath("/admin/properties");
   }
 
   const { error } = await supabaseAdmin.from("tenants").delete().eq("id", id);
@@ -1429,9 +1472,8 @@ export async function getPortfolioHealth(): Promise<PortfolioHealth> {
     supabaseAdmin.from("rooms").select("*"),
     supabaseAdmin
       .from("tenants")
-      .select("id, room_id, rooms(property_id)")
-      .eq("status", "active")
-      .not("room_id", "is", null),
+      .select("id, room_id, property_id, rooms(property_id)")
+      .eq("status", "active"),
     supabaseAdmin
       .from("payments")
       .select("tenant_id, status")
@@ -1451,11 +1493,16 @@ export async function getPortfolioHealth(): Promise<PortfolioHealth> {
       .map((p) => p.tenant_id)
   );
 
-  // Active tenant → property, and unpaid counts per property.
+  // Active tenant → property, and unpaid counts per property. A tenant is tied to
+  // a property either through their room (co-living) or directly (whole-house).
   const activeByProp: Record<number, number> = {};
   const unpaidByProp: Record<number, number> = {};
-  for (const row of (tenantsRes.data ?? []) as unknown as { id: number; rooms: { property_id: number } | null }[]) {
-    const pid = row.rooms?.property_id;
+  for (const row of (tenantsRes.data ?? []) as unknown as {
+    id: number;
+    property_id: number | null;
+    rooms: { property_id: number } | null;
+  }[]) {
+    const pid = row.rooms?.property_id ?? row.property_id;
     if (!pid) continue;
     activeByProp[pid] = (activeByProp[pid] ?? 0) + 1;
     if (!paidTenantIds.has(row.id)) unpaidByProp[pid] = (unpaidByProp[pid] ?? 0) + 1;

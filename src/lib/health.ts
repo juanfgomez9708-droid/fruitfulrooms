@@ -14,7 +14,7 @@
 import {
   UPKEEP_TASKS,
   DERIVED_WEIGHTS,
-  BILL_GROUPS,
+  billGroupsForProperty,
   HEALTH_CONFIG,
   ISSUE_PRIORITIES,
 } from "./constants";
@@ -108,10 +108,10 @@ export function computePropertyHealth(snapshot: HealthSnapshot): PropertyHealth 
     });
   }
 
-  // ─── Monthly bills ─────────────────────────────────────────────────────────
+  // ─── Monthly bills (which bills count depends on rental type) ───────────────
   let essentialUnpaid = false;
-  for (const group of BILL_GROUPS) {
-    const weight = DERIVED_WEIGHTS[group.key];
+  for (const group of billGroupsForProperty(property.rental_type)) {
+    const weight = group.weight;
     const missing = group.categories.filter((c) => !snapshot.paidBillCategories.has(c));
     let severity = 0;
     let status: FactorStatus = "good";
@@ -291,11 +291,12 @@ function buildVacancyFactor(snapshot: HealthSnapshot): {
         : `${vacantCount} of ${totalUnits} room${totalUnits === 1 ? "" : "s"} vacant` +
           (maxDaysVacant >= 1 ? ` (longest ${Math.round(maxDaysVacant)}d)` : "");
   } else {
-    // Whole-house property with no per-room breakdown: use the property status.
+    // Whole-house property: one unit. An active tenant means 100% occupancy;
+    // otherwise fall back to the property status field.
     totalUnits = 1;
-    if (property.status === "rented") {
+    if (snapshot.activeTenants > 0 || property.status === "rented") {
       severity = 0;
-      detail = "Rented";
+      detail = "Rented (100% occupied)";
     } else if (property.status === "maintenance") {
       severity = 0.5;
       vacantCount = 1;

@@ -123,23 +123,39 @@ export const UPKEEP_TASKS: UpkeepTaskDef[] = [
 
 export const UPKEEP_TASK_KEYS = UPKEEP_TASKS.map((t) => t.key);
 
-/** Weights for factors derived from existing data (not logged as tasks). Sum with
- *  UPKEEP_TASKS weights = 100. */
+/** Weights for factors derived from existing data (not logged as tasks). Combined
+ *  with the bill-group weights (18) and UPKEEP_TASKS weights (22) = 100. */
 export const DERIVED_WEIGHTS = {
   vacancy: 34,
   overdue_rent: 16,
   open_issues: 10,
-  bill_essential: 9, // electricity + water
-  bill_mortgage: 6, // mortgage + lender payment
-  bill_internet: 3,
 } as const;
 
-/** Expense categories that count as each tracked monthly bill. */
-export const BILL_GROUPS: { key: keyof typeof DERIVED_WEIGHTS; label: string; categories: string[] }[] = [
-  { key: "bill_essential", label: "Essential utilities (electric + water)", categories: ["electricity", "water"] },
-  { key: "bill_mortgage", label: "Mortgage / lender payment", categories: ["mortgage", "lender_payment"] },
-  { key: "bill_internet", label: "Internet", categories: ["internet"] },
+export interface BillGroup {
+  key: string;
+  label: string;
+  categories: string[]; // expense categories that count as this bill being paid
+  weight: number;
+}
+
+// Each set sums to 18 (the Bills budget) so overall health still tops out at 100.
+// Co-living: landlord pays utilities + mortgage/lender + internet.
+export const CO_LIVING_BILL_GROUPS: BillGroup[] = [
+  { key: "bill_essential", label: "Essential utilities (electric + water)", categories: ["electricity", "water"], weight: 9 },
+  { key: "bill_mortgage", label: "Mortgage / lender payment", categories: ["mortgage", "lender_payment"], weight: 6 },
+  { key: "bill_internet", label: "Internet", categories: ["internet"], weight: 3 },
 ];
+
+// Whole-house single-family: tenant covers utilities; landlord pays mortgage + internet.
+export const WHOLE_HOUSE_BILL_GROUPS: BillGroup[] = [
+  { key: "bill_mortgage", label: "Mortgage", categories: ["mortgage"], weight: 12 },
+  { key: "bill_internet", label: "Internet", categories: ["internet"], weight: 6 },
+];
+
+/** Which monthly bills count toward a property's health, by rental type. */
+export function billGroupsForProperty(rentalType: string | null | undefined): BillGroup[] {
+  return rentalType === "whole-house" ? WHOLE_HOUSE_BILL_GROUPS : CO_LIVING_BILL_GROUPS;
+}
 
 /** Health tuning knobs. */
 export const HEALTH_CONFIG = {
